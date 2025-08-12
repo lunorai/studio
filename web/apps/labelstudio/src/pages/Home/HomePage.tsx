@@ -1,10 +1,11 @@
-import { IconExternal, IconFolderAdd, IconHumanSignal, IconUserAdd, IconFolderOpen } from "@humansignal/icons";
+import { IconExternal, IconFolderAdd, IconUserAdd, IconFolderOpen, IconHumanSignal } from "@humansignal/icons";
 import { Button, SimpleCard, Spinner, Typography } from "@humansignal/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { HeidiTips } from "../../components/HeidiTips/HeidiTips";
 import { useAPI } from "../../providers/ApiProvider";
+import { useCurrentUser } from "../../providers/CurrentUser";
 import { CreateProject } from "../CreateProject/CreateProject";
 import { InviteLink } from "../Organization/PeoplePage/InviteLink";
 import type { Page } from "../types/Page";
@@ -51,6 +52,9 @@ type Action = (typeof actions)[number]["type"];
 
 export const HomePage: Page = () => {
   const api = useAPI();
+  const { user } = useCurrentUser();
+  // const isOwner = user?.active_organization_membership?.role === 'OW';
+  const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
   const [creationDialogOpen, setCreationDialogOpen] = useState(false);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const { data, isFetching, isSuccess, isError } = useQuery({
@@ -75,6 +79,10 @@ export const HomePage: Page = () => {
     };
   };
 
+  // Add this conditional check before rendering projects
+  const canViewProject = isOwner;
+  const visibleProjects = canViewProject ? data?.results : [];
+
   return (
     <main className="p-6">
       <div className="grid grid-cols-[minmax(0,1fr)_450px] gap-6">
@@ -88,7 +96,7 @@ export const HomePage: Page = () => {
             </Typography>
           </div>
           <div className="flex justify-start gap-4">
-            {actions.map((action) => {
+            {isOwner && actions.map((action) => {
               return (
                 <Button
                   key={action.title}
@@ -122,7 +130,7 @@ export const HomePage: Page = () => {
               </div>
             ) : isError ? (
               <div className="h-64 flex justify-center items-center">can't load projects</div>
-            ) : isSuccess && data && data.results.length === 0 ? (
+            ) : isSuccess && (!data || !visibleProjects || visibleProjects.length === 0) ? (
               <div className="flex flex-col justify-center items-center border border-primary-border-subtle bg-primary-emphasis-subtle rounded-lg h-64">
                 <div
                   className={
@@ -132,18 +140,23 @@ export const HomePage: Page = () => {
                   <IconFolderOpen />
                 </div>
                 <Typography variant="headline" size="small">
-                  Create your first project
+                  {isOwner ? "Create your first project" : "No projects available"}
                 </Typography>
                 <Typography size="small" className="text-neutral-content-subtler">
-                  Import your data and set up the labeling interface to start annotating
+                  {isOwner
+                    ? "Import your data and set up the labeling interface to start annotating"
+                    : "Contact your organization owner to get access to projects"
+                  }
                 </Typography>
-                <Button className="mt-4" onClick={() => setCreationDialogOpen(true)} aria-label="Create new project">
-                  Create Project
-                </Button>
+                {isOwner && (
+                  <Button className="mt-4" onClick={() => setCreationDialogOpen(true)} aria-label="Create new project">
+                    Create Project
+                  </Button>
+                )}
               </div>
-            ) : isSuccess && data && data.results.length > 0 ? (
+            ) : isSuccess && visibleProjects && visibleProjects.length > 0 ? (
               <div className="flex flex-col gap-1">
-                {data.results.map((project) => {
+                {visibleProjects.map((project) => {
                   return <ProjectSimpleCard key={project.id} project={project} />;
                 })}
               </div>

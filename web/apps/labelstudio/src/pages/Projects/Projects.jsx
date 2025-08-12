@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useParams as useRouterParams } from "react-router";
 import { Redirect } from "react-router-dom";
 import { Button } from "@humansignal/ui";
+import { useCurrentUser } from "../../providers/CurrentUser";
 import { Oneof } from "../../components/Oneof/Oneof";
 import { Spinner } from "../../components/Spinner/Spinner";
 import { ApiContext } from "../../providers/ApiProvider";
@@ -22,6 +23,11 @@ const getCurrentPage = () => {
 
 export const ProjectsPage = () => {
   const api = React.useContext(ApiContext);
+  const { user } = useCurrentUser();
+  const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
+  console.log('User email:', user?.email);
+  console.log('Org owner email:', user?.active_organization_meta?.email);
+  console.log('Has active org:', !!user?.active_organization_meta);
   const abortController = useAbortController();
   const [projectsList, setProjectsList] = React.useState([]);
   const [networkState, setNetworkState] = React.useState(null);
@@ -34,7 +40,10 @@ export const ProjectsPage = () => {
 
   const openModal = () => setModal(true);
 
-  const closeModal = () => setModal(false);
+  const closeModal = () => {
+    setModal(false);
+    if (!isOwner) return; // Don't allow non-owners to open the modal
+  };
 
   const fetchProjects = async (page = currentPage, pageSize = defaultPageSize) => {
     setNetworkState("loading");
@@ -108,10 +117,11 @@ export const ProjectsPage = () => {
   }, []);
 
   React.useEffect(() => {
-    // there is a nice page with Create button when list is empty
-    // so don't show the context button in that case
-    setContextProps({ openModal, showButton: projectsList.length > 0 });
-  }, [projectsList.length]);
+    // Only show Create button in top-right if:
+    // 1. User is an owner, and
+    // 2. There are existing projects (otherwise the empty state has a create button)
+    setContextProps({ openModal, showButton: isOwner && projectsList.length > 0 });
+  }, [projectsList.length, isOwner]);
 
   return (
     <Block name="projects-page">

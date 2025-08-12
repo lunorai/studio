@@ -7,14 +7,27 @@ import { Userpic, Button } from "@humansignal/ui";
 import { Dropdown, Menu, Pagination } from "../../components";
 import { Block, Elem } from "../../utils/bem";
 import { absoluteURL } from "../../utils/helpers";
+import { useCurrentUser } from "../../providers/CurrentUser";
 
 const DEFAULT_CARD_COLORS = ["#FFFFFF", "#FDFDFC"];
 
 export const ProjectsList = ({ projects, currentPage, totalItems, loadNextPage, pageSize }) => {
+  const { user } = useCurrentUser();
+  const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
+
+
+  // Single source of truth for project visibility logic
+  const canViewProject = isOwner;
+  const visibleProjects = canViewProject ? projects : [];
+
+  if (!projects || projects.length === 0 || visibleProjects.length === 0) {
+    return <EmptyProjectsList openModal={() => { }} isOwner={isOwner} />;
+  }
+
   return (
     <>
       <Elem name="list">
-        {projects.map((project) => (
+        {visibleProjects.map((project) => (
           <ProjectCard key={project.id} project={project} />
         ))}
       </Elem>
@@ -34,17 +47,25 @@ export const ProjectsList = ({ projects, currentPage, totalItems, loadNextPage, 
   );
 };
 
-export const EmptyProjectsList = ({ openModal }) => {
+export const EmptyProjectsList = ({ openModal, isOwner=true }) => {
   return (
     <Block name="empty-projects-page">
-      <Elem name="heidi" tag="img" src={absoluteURL("/static/images/opossum_looking.png")} />
+      <Elem name="heidi" tag="img" src={absoluteURL("/static/images/opossum_looking.png")} onError={e => { e.target.style.display = 'none'; }} />
       <Elem name="header" tag="h1">
-        Heidi doesn’t see any projects here!
+        No projects found!
       </Elem>
-      <p>Create one and start labeling your data.</p>
-      <Button onClick={openModal} className="my-8" aria-label="Create new project">
-        Create Project
-      </Button>
+      <Block name="empty-projects-description">
+        <p>
+          {isOwner
+            ? "You don't have any projects yet. Create a new project to start labeling your data."
+            : "There are no projects available for you to view."}
+        </p>
+        {isOwner && (
+          <Button onClick={openModal} className="my-8" aria-label="Create new project">
+            Create Project
+          </Button>
+        )}
+      </Block>
     </Block>
   );
 };
@@ -61,11 +82,11 @@ const ProjectCard = ({ project }) => {
         : "var(--color-neutral-inverted-content)"; // Determine text color based on luminance
     return color
       ? {
-          "--header-color": color,
-          "--background-color": chr(color).alpha(0.2).css(),
-          "--text-color": textColor,
-          "--border-color": chr(color).alpha(0.5).css(),
-        }
+        "--header-color": color,
+        "--background-color": chr(color).alpha(0.2).css(),
+        "--text-color": textColor,
+        "--border-color": chr(color).alpha(0.5).css(),
+      }
       : {};
   }, [color]);
 
