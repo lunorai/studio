@@ -17,7 +17,7 @@ import { Input, TextArea } from "../../components/Form";
 import { FF_LSDV_E_297, isFF } from "../../utils/feature-flags";
 import { createURL } from "../../components/HeidiTips/utils";
 
-const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, setDescription, show = true }) =>
+const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, setDescription, show = true, challengeId, setChallengeId, round, setRound }) =>
   !show ? null : (
     <form
       className={cn("project-name")}
@@ -53,6 +53,38 @@ const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, 
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           className="project-description w-full"
+        />
+      </div>
+      <div className="w-full flex flex-col gap-2">
+        <label className="w-full" htmlFor="project_challenge_id">
+          Challenge Id
+        </label>
+        <TextArea
+          name="challenge_id"
+          id="project_challenge_id"
+          placeholder="Challenge ID of Lunor Quest"
+          rows="4"
+          style={{ minHeight: 100 }}
+          value={challengeId}
+          onChange={(e) => setChallengeId(e.target.value)}
+          className="project-description w-full"
+          required={true}
+        />
+      </div>
+      <div className="w-full flex flex-col gap-2">
+        <label className="w-full" htmlFor="round">
+          Round
+        </label>
+        <TextArea
+          name="round"
+          id="project_round"
+          placeholder="Round number of the challenge"
+          rows="4"
+          style={{ minHeight: 100 }}
+          value={round}
+          onChange={(e) => setRound(e.target.value)}
+          className="project-description w-full"
+          required={true}
         />
       </div>
       {isFF(FF_LSDV_E_297) && (
@@ -97,6 +129,8 @@ export const CreateProject = ({ onClose }) => {
   const [error, setError] = React.useState();
   const [description, setDescription] = React.useState("");
   const [sample, setSample] = React.useState(null);
+  const [challengeId, setChallengeId] = React.useState("");
+  const [round, setRound] = React.useState("");
 
   const setStep = React.useCallback((step) => {
     _setStep(step);
@@ -132,9 +166,11 @@ export const CreateProject = ({ onClose }) => {
     () => ({
       title: name,
       description,
+      challenge_id: challengeId,
+      round,
       label_config: project?.label_config ?? "<View></View>",
     }),
-    [name, description, project?.label_config],
+    [name, description, challengeId, round, project?.label_config],
   );
 
   const onCreate = React.useCallback(async () => {
@@ -163,6 +199,10 @@ export const CreateProject = ({ onClose }) => {
 
   const onSaveName = async () => {
     if (error) return;
+    if (!project || !project.id) {
+      setError("Project ID is missing. Cannot update project name.");
+      return;
+    }
     const res = await api.callApi("updateProjectRaw", {
       params: {
         pk: project.id,
@@ -232,6 +272,10 @@ export const CreateProject = ({ onClose }) => {
           description={description}
           setDescription={setDescription}
           show={step === "name"}
+          challengeId={challengeId}
+          setChallengeId={setChallengeId}
+          round={round}
+          setRound={setRound}
         />
         <ImportPage
           project={project}

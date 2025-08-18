@@ -25,9 +25,9 @@ export const ProjectsPage = () => {
   const api = React.useContext(ApiContext);
   const { user } = useCurrentUser();
   const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
-  console.log('User email:', user?.email);
-  console.log('Org owner email:', user?.active_organization_meta?.email);
-  console.log('Has active org:', !!user?.active_organization_meta);
+  // console.log('User email:', user?.email);
+  // console.log('Org owner email:', user?.active_organization_meta?.email);
+  // console.log('Has active org:', !!user?.active_organization_meta);
   const abortController = useAbortController();
   const [projectsList, setProjectsList] = React.useState([]);
   const [networkState, setNetworkState] = React.useState(null);
@@ -68,7 +68,19 @@ export const ProjectsPage = () => {
     });
 
     setTotalItems(data?.count ?? 1);
+    // Show projects if owner, or if user is a participant
+    // setProjectsList(
+    //   (data.results ?? []).filter(project => {
+    //     const participants = project.participants;
+    //     if (isOwner) return true;
+    //     if (!user?.lunor_username || !Array.isArray(participants)) return false;
+    //     return participants.includes(user.lunor_username);
+    //   })
+    // );
+
+    // console.log("Projects fetched", projectsList);
     setProjectsList(data.results ?? []);
+
     setNetworkState("loaded");
 
     if (data?.results?.length) {
@@ -85,6 +97,9 @@ export const ProjectsPage = () => {
             "total_predictions_number",
             "ground_truth_number",
             "finished_task_number",
+            "challenge_id",
+            "round",
+            "participants",
           ].join(","),
           page_size: pageSize,
         },

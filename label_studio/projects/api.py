@@ -1,5 +1,16 @@
-"""This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
+This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
+"""
+
+import logging
+import os
+import pathlib
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from projects.models import Project
+
 import logging
 import os
 import pathlib
@@ -173,6 +184,49 @@ class ProjectListPagination(PageNumberPagination):
 class ProjectFilterSet(FilterSet):
     ids = ListFilter(field_name='id', lookup_expr='in')
     title = CharFilter(field_name='title', lookup_expr='icontains')
+
+# Place UpdateParticipantsAPI after all imports
+
+class UpdateParticipantsAPI(APIView):
+    def post(self, request):
+        challenge_id = request.data.get('challenge_id')
+        round_value = request.data.get('round')
+        participant = request.data.get('participant')  # Single participant string
+
+        # Log received data and types for debugging
+        print(f"Challenge ID: {challenge_id} (type: {type(challenge_id)})")
+        print(f"Round: {round_value} (type: {type(round_value)})")
+        print(f"Participant: {participant} (type: {type(participant)})")
+
+        # Ensure challenge_id and round_value are strings (to match DB text fields)
+        if challenge_id is not None:
+            challenge_id = str(challenge_id)
+        if round_value is not None:
+            round_value = str(round_value)  # Explicit cast to string
+
+        # Validate participant presence and type
+        if not participant or not isinstance(participant, str):
+            return Response({'error': 'Missing or invalid participant'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Query the project using string values to avoid type error
+        project = Project.objects.filter(challenge_id=challenge_id, round=round_value).first()
+        if not project:
+            return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Initialize participants list if None, empty, or not a list
+        current_participants = project.participants
+        if not isinstance(current_participants, list):
+            current_participants = []
+
+        # Append new participant if not already in the list
+        if participant not in current_participants:
+            current_participants.append(participant)
+
+        # Save changes
+        project.participants = current_participants
+        project.save()
+
+        return Response({'success': True, 'participants': project.participants})
 
 
 @method_decorator(

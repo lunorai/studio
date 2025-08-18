@@ -249,6 +249,9 @@ class ProjectSerializer(FlexFieldsModelSerializer):
             'queue_total',
             'queue_done',
             'config_suitable_for_bulk_annotation',
+            'challenge_id',
+            'round',
+            'participants',
         ]
 
     def validate_label_config(self, value):

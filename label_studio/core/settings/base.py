@@ -157,6 +157,12 @@ DATABASES_ALL = {
         'NAME': get_env('POSTGRE_NAME', 'postgres'),
         'HOST': get_env('POSTGRE_HOST', 'localhost'),
         'PORT': int(get_env('POSTGRE_PORT', '5432')),
+        # 'ENGINE': 'django.db.backends.postgresql',
+        # 'USER': 'postgres',
+        # 'PASSWORD': 'VJ6kCxUG0dFMrJkg',
+        # 'NAME': 'postgres',
+        # 'HOST': 'db.zrsgixryjlammzksqgrv.supabase.co',
+        # 'PORT': 5432,
     },
     DJANGO_DB_MYSQL: {
         'ENGINE': 'django.db.backends.mysql',

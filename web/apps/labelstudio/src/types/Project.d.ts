@@ -1,5 +1,6 @@
 // id and title fixed because they'll be always defined in API response
 declare type APIProject = {
+  participants(participants: any): unknown;
   id: number;
 
   /** Project name. Must be between 3 and 50 characters long. */

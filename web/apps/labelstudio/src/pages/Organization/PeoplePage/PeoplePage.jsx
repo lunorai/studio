@@ -13,12 +13,16 @@ import { IconPlus } from "@humansignal/icons";
 import { useToast } from "@humansignal/ui";
 import { InviteLink } from "./InviteLink";
 import { SelectedUser } from "./SelectedUser";
+import { useCurrentUser } from "../../../providers/CurrentUser";
 
 export const PeoplePage = () => {
   const apiSettingsModal = useRef();
   const toast = useToast();
   const [selectedUser, setSelectedUser] = useState(null);
   const [invitationOpen, setInvitationOpen] = useState(false);
+  const { user } = useCurrentUser();
+  // const isOwner = user?.active_organization_membership?.role === 'OW';
+  const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
 
   const selectUser = useCallback(
     (user) => {
@@ -61,18 +65,22 @@ export const PeoplePage = () => {
           <Space />
 
           <Space>
-            {isFF(FF_AUTH_TOKENS) && (
+
+            {isOwner && (isFF(FF_AUTH_TOKENS) && (
               <Button look="outlined" onClick={showApiTokenSettingsModal} aria-label="Show API token settings">
                 API Tokens Settings
               </Button>
-            )}
-            <Button
-              leading={<IconPlus className="!h-4" />}
-              onClick={() => setInvitationOpen(true)}
-              aria-label="Invite new member"
-            >
-              Add People
-            </Button>
+            ))}
+            {
+              isOwner && (
+                <Button
+                  leading={<IconPlus className="!h-4" />}
+                  onClick={() => setInvitationOpen(true)}
+                  aria-label="Invite new member"
+                >
+                  Add People
+                </Button>
+              )}
           </Space>
         </Space>
       </Elem>

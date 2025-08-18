@@ -115,6 +115,23 @@ recalculate_all_stats = load_func(settings.RECALCULATE_ALL_STATS)
 
 
 class Project(ProjectMixin, models.Model):
+    participants = models.JSONField(_('participants'), default=list, blank=True, null=True, help_text='List of participant usernames')
+    challenge_id = models.CharField(
+        _('challenge id'),
+        max_length=255,
+        blank=True,
+        null=True,
+        default='',
+        help_text='Optional challenge id for project integration.'
+    )
+    round = models.PositiveIntegerField(
+        _('round'),
+        blank=True,
+        null=True,
+        default=None,
+        help_text='Round number of the challenge.'
+    )
+
     class SkipQueue(models.TextChoices):
         # requeue to the end of the same annotator’s queue => annotator gets this task at the end of the queue
         REQUEUE_FOR_ME = 'REQUEUE_FOR_ME', 'Requeue for me'

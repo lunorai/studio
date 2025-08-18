@@ -80,8 +80,22 @@ export const HomePage: Page = () => {
   };
 
   // Add this conditional check before rendering projects
-  const canViewProject = isOwner;
-  const visibleProjects = canViewProject ? data?.results : [];
+  const userLunorUsername = user?.lunor_username;
+  const visibleProjects = data?.results
+    ? data.results.filter(project => {
+        const participants = (project as any).participants;
+        // Show if owner
+        if (isOwner) return true;
+        // If not owner, show only if participated
+        if (!userLunorUsername || !Array.isArray(participants)) return false;
+        return participants.includes(userLunorUsername);
+      })
+    : [];
+
+  // console.log("Projects", data);
+  // console.log("Visible Projects", visibleProjects);
+  // console.log("User Lunor Username", userLunorUsername);
+  // console.log("current User", user);
 
   return (
     <main className="p-6">
