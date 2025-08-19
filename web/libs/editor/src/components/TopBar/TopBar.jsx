@@ -22,6 +22,10 @@ export const TopBar = observer(({ store }) => {
 
   const isViewAll = annotationStore?.viewingAll === true;
   const isBulkMode = isFF(FF_BULK_ANNOTATION) && !isSelfServe() && store.hasInterface("annotation:bulk");
+  const currentUser = store?.user;
+  const isOwner = Boolean(currentUser?.isOwner) || (
+    Boolean(currentUser?.activeOrganizationMeta?.email) && currentUser?.email === currentUser?.activeOrganizationMeta?.email
+  );
 
   if (isFF(FF_DEV_3873) && isBulkMode) return null;
 
@@ -30,7 +34,7 @@ export const TopBar = observer(({ store }) => {
       {isFF(FF_DEV_3873) ? (
         <Elem name="group">
           <CurrentTask store={store} />
-          {store.hasInterface("annotations:view-all") && (
+          {store.hasInterface("annotations:view-all") && isOwner && (
             <Button
               className={"topbar__button"}
               type={isViewAll ? undefined : "string"}

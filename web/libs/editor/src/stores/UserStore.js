@@ -12,6 +12,8 @@ export const UserExtended = types
     avatar: types.maybeNull(types.string),
     initials: types.maybeNull(types.string),
     phone: types.maybeNull(types.string),
+    // Active organization metadata injected from backend template or API
+    activeOrganizationMeta: types.maybeNull(types.frozen()),
   })
   .preProcessSnapshot((sn) => {
     return camelizeKeys(sn ?? {});

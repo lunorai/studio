@@ -9,7 +9,7 @@ import { destroy as destroySharedStore } from "../mixins/SharedChoiceStore/mixin
 import ToolsManager from "../tools/Manager";
 import Utils from "../utils";
 import { guidGenerator } from "../utils/unique";
-import { clamp, delay, isDefined } from "../utils/utilities";
+import { clamp, delay, isDefined, emailFromCreatedBy } from "../utils/utilities";
 import { CREATE_RELATION_MODE } from "./Annotation/LinkingModes";
 import AnnotationStore from "./Annotation/store";
 import Project from "./ProjectStore";
@@ -823,17 +823,31 @@ export default types
         // simple logging to detect if simple init is used on users' machines
         console.log("LSF: deserialization is finished");
 
-        // next line might be unclear after removing FF_SIMPLE_INIT
-        // reversing the list caused problems before when task is reloaded and list is reversed again.
-        // AnnotationsCarousel has its own ordering anyway, so we just keep technical order
-        // as simple as possible.
-        const current = as.annotations.at(-1);
+        // Prefer selecting the current user's own annotation if available;
+        // if user is owner, allow all; otherwise, prefer own or create blank
+        const currentUserId = self.user?.id;
+        const currentUserEmail = self.user?.email;
+        const isOwner = Boolean(self.user?.isOwner) || (
+          Boolean(self.user?.activeOrganizationMeta?.email) && self.user?.email === self.user?.activeOrganizationMeta?.email
+        );
+        const ownList = as.annotations.filter((a) => {
+          const sameId = a?.user?.id === currentUserId;
+          const createdEmail = emailFromCreatedBy?.(a?.createdBy) ?? a?.createdBy;
+          const sameEmail = createdEmail && currentUserEmail && createdEmail === currentUserEmail;
+          return sameId || sameEmail;
+        });
+
+        const own = ownList.at(-1);
+        let current = (isOwner ? as.annotations.at(-1) : own) ?? as.annotations.at(-1);
         const currentPrediction = !current && as.predictions.at(-1);
 
+        if (!isOwner && !own && self.hasInterface("annotations:add-new")) {
+          const created = as.createAnnotation({ userGenerate: true });
+          current = created;
+        }
+
         if (current) {
-          as.selectAnnotation(current.id);
-          // looks like we still need it anyway, but it's fast and harmless,
-          // and we only call it once on already visible annotation
+          if (!current.selected) as.selectAnnotation(current.id);
           current.reinitHistory();
         } else if (currentPrediction) {
           as.selectPrediction(currentPrediction.id);
@@ -862,9 +876,30 @@ export default types
           obj.reinitHistory();
         });
 
-        const current = as.annotations.at(-1);
+        // After normal init, prefer selecting the current user's own annotation;
+        // if user is owner, allow all; if none exists and creation is allowed, create a blank one
+        const currentUserId = self.user?.id;
+        const currentUserEmail = self.user?.email;
+        const isOwner = Boolean(self.user?.isOwner) || (
+          Boolean(self.user?.activeOrganizationMeta?.email) && self.user?.email === self.user?.activeOrganizationMeta?.email
+        );
+        const ownList = as.annotations.filter((a) => {
+          const sameId = a?.user?.id === currentUserId;
+          const createdEmail = emailFromCreatedBy?.(a?.createdBy) ?? a?.createdBy;
+          const sameEmail = createdEmail && currentUserEmail && createdEmail === currentUserEmail;
+          return sameId || sameEmail;
+        });
 
-        if (current) current.setInitialValues();
+        let current = (isOwner ? as.annotations.at(-1) : ownList.at(-1)) ?? as.annotations.at(-1);
+
+        if (!isOwner && ownList.length === 0 && self.hasInterface("annotations:add-new")) {
+          current = as.createAnnotation({ userGenerate: true });
+        }
+
+        if (current) {
+          if (!current.selected) as.selectAnnotation(current.id);
+          current.setInitialValues();
+        }
 
         self.setHistory(annotationHistory);
       }

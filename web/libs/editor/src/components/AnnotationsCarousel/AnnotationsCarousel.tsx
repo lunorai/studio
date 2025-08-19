@@ -53,13 +53,39 @@ export const AnnotationsCarousel = observer(({ store, annotationStore }: Annotat
   ]);
 
   useEffect(() => {
-    const newEntities = [];
+    let newEntities: any[] = [];
 
+    // Collect available entities
     if (enablePredictions) newEntities.push(...annotationStore.predictions);
 
     if (enableAnnotations) newEntities.push(...annotationStore.annotations);
+
+    // Respect owner visibility: owners see everything; others see only their own annotations
+    const currentUser = store?.user;
+    const isOwner = Boolean(currentUser?.isOwner) || (
+      Boolean(currentUser?.activeOrganizationMeta?.email) && currentUser?.email === currentUser?.activeOrganizationMeta?.email
+    );
+    console.log("is owner: ", isOwner);
+    console.log("Current User: ", currentUser);
+    if (!isOwner && currentUser) {
+      newEntities = newEntities.filter((entity) => {
+        // Only keep annotations created by the current user; exclude predictions for non-owners
+        if (entity?.type !== "annotation") return false;
+        const isSameUserId = entity?.user?.id === currentUser.id;
+        const isSameEmail = entity?.createdBy === currentUser.email;
+        return isSameUserId || isSameEmail;
+      });
+    }
+
     setEntities(newEntities);
-  }, [annotationStore, JSON.stringify(annotationStore.predictions), JSON.stringify(annotationStore.annotations)]);
+  }, [
+    store?.user?.id,
+    store?.user?.email,
+    store?.user?.activeOrganizationMeta?.email,
+    annotationStore,
+    JSON.stringify(annotationStore.predictions),
+    JSON.stringify(annotationStore.annotations),
+  ]);
 
   return enableAnnotations || enablePredictions || enableCreateAnnotation ? (
     <Block name="annotations-carousel" style={{ "--carousel-left": `${currentPosition}px` }}>
@@ -77,6 +103,7 @@ export const AnnotationsCarousel = observer(({ store, annotationStore }: Annotat
                 enableAnnotationDelete,
               }}
               annotationStore={annotationStore}
+              store={store}
             />
           ))}
         </Elem>
