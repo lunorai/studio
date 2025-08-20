@@ -24,6 +24,7 @@ const getCurrentPage = () => {
 export const ProjectsPage = () => {
   const api = React.useContext(ApiContext);
   const { user } = useCurrentUser();
+  // Treat as owner if no active org (personal) or email equals active org owner's email
   const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
   // console.log('User email:', user?.email);
   // console.log('Org owner email:', user?.active_organization_meta?.email);

@@ -13,6 +13,7 @@ const DEFAULT_CARD_COLORS = ["#FFFFFF", "#FDFDFC"];
 
 export const ProjectsList = ({ projects, currentPage, totalItems, loadNextPage, pageSize }) => {
   const { user } = useCurrentUser();
+  // Treat as owner if no active org (personal) or email equals active org owner's email
   const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
   // console.log('ProjectsList rendered', projects);
 

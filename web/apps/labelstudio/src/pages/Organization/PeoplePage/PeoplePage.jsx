@@ -22,6 +22,7 @@ export const PeoplePage = () => {
   const [invitationOpen, setInvitationOpen] = useState(false);
   const { user } = useCurrentUser();
   // const isOwner = user?.active_organization_membership?.role === 'OW';
+  // Treat as owner if no active org (personal) or email equals active org owner's email
   const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
 
   const selectUser = useCallback(
