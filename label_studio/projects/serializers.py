@@ -252,6 +252,7 @@ class ProjectSerializer(FlexFieldsModelSerializer):
             'challenge_id',
             'round',
             'participants',
+            'challenge_status',
         ]
 
     def validate_label_config(self, value):

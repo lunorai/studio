@@ -1,6 +1,6 @@
 from django.urls import include, path
 from . import api, views
-from .api import UpdateParticipantsAPI
+from .api import UpdateParticipantsAPI, UpdateChallengeStatusAPI
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
 from django.urls import include, path
@@ -60,4 +60,5 @@ urlpatterns = [
     path('api/projects/', include((_api_urlpatterns, app_name), namespace='api')),
     path('api/templates/', include((_api_urlpatterns_templates, app_name), namespace='api-templates')),
     path('api/update-participants/', UpdateParticipantsAPI.as_view(), name='update-participants'),
+    path('api/update-challenge-status/', UpdateChallengeStatusAPI.as_view(), name='update-challenge-status'),
 ]

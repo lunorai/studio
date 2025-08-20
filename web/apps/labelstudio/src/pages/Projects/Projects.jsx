@@ -31,7 +31,7 @@ export const ProjectsPage = () => {
    - Otherwise, the owner is the account whose email matches active_organization_meta.email.
 
   */
-  const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
+  const isOwner = !!user && (!user?.active_organization_meta || user?.email === user?.active_organization_meta?.email);
   // console.log('User email:', user?.email);
   // console.log('Org owner email:', user?.active_organization_meta?.email);
   // console.log('Has active org:', !!user?.active_organization_meta);
@@ -66,6 +66,7 @@ export const ProjectsPage = () => {
       "color",
       "is_published",
       "assignment_settings",
+      "challenge_status",
     ].join(",");
 
     const data = await api.callApi("projects", {
@@ -107,6 +108,7 @@ export const ProjectsPage = () => {
             "challenge_id",
             "round",
             "participants",
+            "challenge_status",
           ].join(","),
           page_size: pageSize,
         },

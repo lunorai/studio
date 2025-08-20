@@ -229,6 +229,47 @@ class UpdateParticipantsAPI(APIView):
         return Response({'success': True, 'participants': project.participants})
 
 
+class UpdateChallengeStatusAPI(APIView):
+    def post(self, request):
+        challenge_id = request.data.get('challenge_id')
+        round_value = request.data.get('round')
+        status_value = request.data.get('challenge_status')  # can be bool, int, or string
+
+        print(f"Challenge ID: {challenge_id} (type: {type(challenge_id)})")
+        print(f"Round: {round_value} (type: {type(round_value)})")
+        print(f"Challenge Status: {status_value} (type: {type(status_value)})")
+
+        if challenge_id is not None:
+            challenge_id = str(challenge_id)
+        if round_value is not None:
+            round_value = str(round_value)
+
+        def parse_bool(value):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int,)):
+                return value == 1
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in {'true', '1', 'yes', 'y'}:
+                    return True
+                if lowered in {'false', '0', 'no', 'n'}:
+                    return False
+            return None
+
+        parsed_status = parse_bool(status_value)
+        if parsed_status is None:
+            return Response({'error': 'Missing or invalid challenge_status, expected boolean-like value'}, status=status.HTTP_400_BAD_REQUEST)
+
+        project = Project.objects.filter(challenge_id=challenge_id, round=round_value).first()
+        if not project:
+            return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        project.challenge_status = parsed_status
+        project.save(update_fields=['challenge_status'])
+
+        return Response({'success': True, 'challenge_status': project.challenge_status})
+
 @method_decorator(
     name='get',
     decorator=extend_schema(

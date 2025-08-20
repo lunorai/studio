@@ -53,8 +53,9 @@ type Action = (typeof actions)[number]["type"];
 export const HomePage: Page = () => {
   const api = useAPI();
   const { user } = useCurrentUser();
+  // Compute ownership only after user is loaded to avoid initial flicker
   // const isOwner = user?.active_organization_membership?.role === 'OW';
-  const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
+  const isOwner = !!user && (!user?.active_organization_meta || user?.email === user?.active_organization_meta?.email);
   const [creationDialogOpen, setCreationDialogOpen] = useState(false);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const { data, isFetching, isSuccess, isError } = useQuery({
@@ -83,10 +84,14 @@ export const HomePage: Page = () => {
   const userLunorUsername = user?.lunor_username;
   const visibleProjects = data?.results
     ? data.results.filter(project => {
-        const participants = (project as any).participants;
-        // Show if owner
+        // Owners see both active and inactive projects
         if (isOwner) return true;
-        // If not owner, show only if participated
+
+        // Non-owners: only active challenges
+        if ((project as any).challenge_status !== true) return false;
+
+        // And only if they are in participants
+        const participants = (project as any).participants;
         if (!userLunorUsername || !Array.isArray(participants)) return false;
         return participants.includes(userLunorUsername);
       })

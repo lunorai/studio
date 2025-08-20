@@ -131,6 +131,11 @@ class Project(ProjectMixin, models.Model):
         default=None,
         help_text='Round number of the challenge.'
     )
+    challenge_status = models.BooleanField(
+        _('challenge status'),
+        default=True,
+        help_text='True means active; False means not active.'
+    )
 
     class SkipQueue(models.TextChoices):
         # requeue to the end of the same annotator’s queue => annotator gets this task at the end of the queue

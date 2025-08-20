@@ -20,18 +20,27 @@ export const ProjectsList = ({ projects, currentPage, totalItems, loadNextPage, 
    - Otherwise, the owner is the account whose email matches active_organization_meta.email.
 
   */
-  const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
+  const isOwner = !!user && (!user?.active_organization_meta || user?.email === user?.active_organization_meta?.email);
   // console.log('ProjectsList rendered', projects);
 
   // Single source of truth for project visibility logic
   const visibleProjects = useMemo(() => {
     return (projects ?? []).filter(project => {
-      const participants = project.participants;
+      // Owners see both active and inactive projects
       if (isOwner) return true;
+
+      // Non-owners: only active challenges
+      if (project?.challenge_status !== true) return false;
+
+      // And only if they are in participants
+      const participants = project.participants;
       if (!user?.lunor_username || !Array.isArray(participants)) return false;
       return participants.includes(user.lunor_username);
     });
   }, [projects, isOwner, user?.lunor_username]);
+  // console.log("Visible Projects: ",visibleProjects);
+  // console.log("isOwner: ",isOwner);
+  // console.log("Projects: ",projects);
 
   if (!projects || projects.length === 0 || visibleProjects.length === 0) {
     return <EmptyProjectsList openModal={() => { }} isOwner={isOwner} />;
