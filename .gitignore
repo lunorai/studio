@@ -23,6 +23,7 @@ venv/
 .env
 .envrc
 .env/*
+.env/.*
 # web/static
 
 deploy/license.txt

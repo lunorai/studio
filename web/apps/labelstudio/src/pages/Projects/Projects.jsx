@@ -24,7 +24,13 @@ const getCurrentPage = () => {
 export const ProjectsPage = () => {
   const api = React.useContext(ApiContext);
   const { user } = useCurrentUser();
-  // Treat as owner if no active org (personal) or email equals active org owner's email
+  /*
+   isOwner determines whether the current user has owner-level permissions for the
+   active organization. Some backends do not expose user.isOwner, so we infer it:
+   - Personal workspace (no active_organization_meta) => the current user is treated as the owner.
+   - Otherwise, the owner is the account whose email matches active_organization_meta.email.
+
+  */
   const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
   // console.log('User email:', user?.email);
   // console.log('Org owner email:', user?.active_organization_meta?.email);

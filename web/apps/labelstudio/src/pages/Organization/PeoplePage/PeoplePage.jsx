@@ -21,8 +21,13 @@ export const PeoplePage = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [invitationOpen, setInvitationOpen] = useState(false);
   const { user } = useCurrentUser();
-  // const isOwner = user?.active_organization_membership?.role === 'OW';
-  // Treat as owner if no active org (personal) or email equals active org owner's email
+  /*
+   isOwner determines whether the current user has owner-level permissions for the
+   active organization. Some backends do not expose user.isOwner, so we infer it:
+   - Personal workspace (no active_organization_meta) => the current user is treated as the owner.
+   - Otherwise, the owner is the account whose email matches active_organization_meta.email.
+
+  */
   const isOwner = !user?.active_organization_meta || user?.email === user?.active_organization_meta?.email;
 
   const selectUser = useCallback(

@@ -16,7 +16,18 @@ const isAllowCloudStorage = !isInLicense(LF_CLOUD_STORAGE_FOR_MANAGERS);
 
 export const MenuLayout = ({ children, ...routeProps }) => {
   const { user } = useCurrentUser();
-  // Determine if the current user is an organization owner: explicit flag or email matches active org owner
+  /*
+   isOwner determines whether the current user has owner-level permissions for the
+   active organization.
+
+   Resolution order:
+   1) Prefer the explicit flag provided by the backend: user.isOwner.
+   2) Fallback when the flag is absent (for older/OSS backends):
+      - If active_organization_meta exists, the owner is the account whose email
+        equals active_organization_meta.email.
+      - If there is no active_organization_meta (personal workspace), treat the
+        current user as the owner.
+  */
   const isOwner = Boolean(user?.isOwner) || (
     Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
   );
