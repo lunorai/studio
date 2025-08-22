@@ -81,7 +81,7 @@ export const HomePage: Page = () => {
   };
 
   // Add this conditional check before rendering projects
-  const userLunorUsername = user?.lunor_username;
+  const userLunorUsername = (user as any)?.lunor_userId;
   const visibleProjects = data?.results
     ? data.results.filter(project => {
         // Owners see both active and inactive projects
@@ -184,7 +184,7 @@ export const HomePage: Page = () => {
         </section>
         <section className="flex flex-col gap-6">
           <HeidiTips collection="projectSettings" />
-          <SimpleCard title="Resources" description="Learn, explore and get help" data-testid="resources-card">
+          {/* <SimpleCard title="Resources" description="Learn, explore and get help" data-testid="resources-card">
             <ul>
               {resources.map((link) => {
                 return (
@@ -202,10 +202,10 @@ export const HomePage: Page = () => {
                 );
               })}
             </ul>
-          </SimpleCard>
+          </SimpleCard> */}
           <div className="flex gap-2 items-center">
-            <IconHumanSignal />
-            <span className="text-neutral-content-subtle">Label Studio Version: Community</span>
+            {/* <IconHumanSignal /> */}
+            {/* <span className="text-neutral-content-subtle">Label Studio Version: Community</span> */}
           </div>
         </section>
       </div>

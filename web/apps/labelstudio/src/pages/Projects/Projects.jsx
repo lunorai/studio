@@ -81,8 +81,8 @@ export const ProjectsPage = () => {
     //   (data.results ?? []).filter(project => {
     //     const participants = project.participants;
     //     if (isOwner) return true;
-    //     if (!user?.lunor_username || !Array.isArray(participants)) return false;
-    //     return participants.includes(user.lunor_username);
+    //     if (!user?.lunor_userId || !Array.isArray(participants)) return false;
+    //     return participants.includes(user.lunor_userId);
     //   })
     // );
 

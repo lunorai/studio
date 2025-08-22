@@ -106,7 +106,7 @@ UserMixin = load_func(settings.USER_MIXIN)
 
 
 class User(UserMixin, AbstractBaseUser, PermissionsMixin, UserLastActivityMixin):
-    lunor_username = models.CharField(_('lunor username'), max_length=256, blank=True, null=True)
+    lunor_userId = models.CharField(_('lunor user id'), max_length=256, blank=True, null=True)
     """
     An abstract base class implementing a fully featured User model with
     admin-compliant permissions.

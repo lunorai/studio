@@ -64,7 +64,7 @@ class UserSignupForm(forms.Form):
     allow_newsletters = forms.BooleanField(required=False)
     how_find_us = forms.CharField(required=False)
     elaborate = forms.CharField(required=False)
-    lunor_username = forms.CharField(required=False)
+    lunor_userId = forms.CharField(required=False)
 
     def clean_password(self):
         password = self.cleaned_data.get('password')
@@ -96,7 +96,7 @@ class UserSignupForm(forms.Form):
         email = cleaned['email'].lower()
         allow_newsletters = None
         how_find_us = None
-        lunor_username = cleaned.get('lunor_username', '')
+        lunor_userId = cleaned.get('lunor_userId', '')
         if 'allow_newsletters' in cleaned:
             allow_newsletters = cleaned['allow_newsletters']
         if 'how_find_us' in cleaned:
@@ -108,7 +108,7 @@ class UserSignupForm(forms.Form):
             email,
             password,
             allow_newsletters=allow_newsletters,
-            lunor_username=lunor_username
+            lunor_userId=lunor_userId
         )
         return user
 

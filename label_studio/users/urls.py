@@ -16,8 +16,9 @@ router.register(r'users', api.UserAPI, basename='user')
 urlpatterns = [
     re_path(r'^api/', include(router.urls)),
     # Authentication
-    path('user/login/', views.user_login, name='user-login'),
-    path('user/signup/', views.user_signup, name='user-signup'),
+    path('user/login/', views.user_authenticate, name='user-login'),
+    path('user/signup/', views.user_authenticate, name='user-signup'),
+    path('user/authenticate/', views.user_authenticate, name='user-authenticate'),
     path('user/account/', views.user_account, name='user-account'),
     path('user/account/<sub_path>', views.user_account, name='user-account-anything'),
     re_path(r'^logout/?$', views.logout, name='logout'),

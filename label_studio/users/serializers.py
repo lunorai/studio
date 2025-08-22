@@ -94,7 +94,7 @@ class BaseUserSerializer(FlexFieldsModelSerializer):
             'last_name',
             'username',
             'email',
-            'lunor_username',
+            'lunor_userId',
             'last_activity',
             'custom_hotkeys',
             'avatar',

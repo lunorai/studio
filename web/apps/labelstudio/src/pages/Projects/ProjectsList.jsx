@@ -34,10 +34,10 @@ export const ProjectsList = ({ projects, currentPage, totalItems, loadNextPage, 
 
       // And only if they are in participants
       const participants = project.participants;
-      if (!user?.lunor_username || !Array.isArray(participants)) return false;
-      return participants.includes(user.lunor_username);
+      if (!user?.lunor_userId || !Array.isArray(participants)) return false;
+      return participants.includes(user.lunor_userId);
     });
-  }, [projects, isOwner, user?.lunor_username]);
+  }, [projects, isOwner, user?.lunor_userId]);
   // console.log("Visible Projects: ",visibleProjects);
   // console.log("isOwner: ",isOwner);
   // console.log("Projects: ",projects);

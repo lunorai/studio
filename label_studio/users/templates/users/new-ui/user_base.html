@@ -7,6 +7,7 @@
 {% block head %}
 <link rel="stylesheet" href="{{ settings.HOSTNAME }}{% static 'css/fonts.hellix.css' %}"/>
 <link rel="stylesheet" href="{{ settings.HOSTNAME }}{% static 'css/login.css' %}"/>
+<meta name="ls-collect-analytics" content="{{ settings.COLLECT_ANALYTICS|yesno:'true,false' }}"/>
 
 <script async src="https://www.googletagmanager.com/gtag/js?id=UA-129877673-1" nonce="{{request.csp_nonce}}"></script>
 <script nonce="{{request.csp_nonce}}">
@@ -19,15 +20,22 @@ gtag('config', 'UA-129877673-1');
 
 {% block content %}
 <script nonce="{{request.csp_nonce}}">
-  window.APP_SETTINGS = window.APP_SETTINGS ?? {};
-  window.APP_SETTINGS.collect_analytics = {{ settings.COLLECT_ANALYTICS|yesno:"true,false" }};
+  window.APP_SETTINGS = window.APP_SETTINGS || {};
+  (function(){
+    try {
+      var meta = document.querySelector('meta[name="ls-collect-analytics"]');
+      window.APP_SETTINGS.collect_analytics = (meta && meta.content === 'true');
+    } catch (e) {
+      window.APP_SETTINGS.collect_analytics = false;
+    }
+  })();
 
   // Log event to the server, if analytics are enabled
   // This is a fallback for when the __lsa global is not defined
   // Normally this is a part of our main bundle but these pages do not use the main bundle
   // and this allows us to log events from these pages
   const logEvent = (eventName, metadata = {}) => {
-    if (!window.APP_SETTINGS?.collect_analytics) return;
+    if (!window.APP_SETTINGS || !window.APP_SETTINGS.collect_analytics) return;
 
     const payload = {
       ...metadata,
@@ -57,7 +65,7 @@ gtag('config', 'UA-129877673-1');
 
 <script nonce="{{request.csp_nonce}}">
   const gaClientIdTrackingIframe = (event) => {
-    if (!window.APP_SETTINGS?.collect_analytics) return;
+    if (!window.APP_SETTINGS || !window.APP_SETTINGS.collect_analytics) return;
     
     const iframe = document.createElement("iframe");
     window.addEventListener("message", (message) => {
@@ -74,7 +82,7 @@ gtag('config', 'UA-129877673-1');
 </script>
 
 <div class="login_page_new_ui">
-  <div class="left">
+  <div class="left"{% if auth_page %} style="display:none"{% endif %}>
     <svg role="img" aria-label="Label Studio Logo" class="ls-logo" width="194" height="30" viewBox="0 0 194 30" fill="none" xmlns="http://www.w3.org/2000/svg">
       <title>Label Studio Logo</title>
       <g clip-path="url(#clip0_676_1267)">
@@ -125,7 +133,7 @@ gtag('config', 'UA-129877673-1');
         
     </div>
   </div>
-  <div class="right">
+  <div class="right"{% if auth_page %} style="max-width: 820px; margin: 0 auto; width: 100%;"{% endif %}>
     {% block user_content %}
   </div>
 </div>

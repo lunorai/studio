@@ -26,6 +26,7 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import redirect, render, reverse
+from urllib.parse import urlencode
 from django.utils._os import safe_join
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -59,7 +60,16 @@ def main(request):
             return redirect(reverse('projects:project-index'))
 
     # not authenticated
-    return redirect(reverse('user-login'))
+    login_url = reverse('user-login')
+    params = {}
+    token = request.GET.get('token')
+    if token:
+        params['token'] = token
+    # preserve desired next location (default to '/')
+    params['next'] = '/'
+    if params:
+        return redirect(f"{login_url}?{urlencode(params)}")
+    return redirect(login_url)
 
 
 def version_page(request):

@@ -1,0 +1,52 @@
+{% extends 'users/new-ui/user_base.html' %}
+{% load static %}
+
+{% block user_content %}
+  <div class="auth-container" style="display:flex;justify-content:center;align-items:center;min-height:60vh;">
+    <div class="auth-card" style="max-width:480px;width:100%;background:#fff;padding:32px;border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,0.1);text-align:center;">
+      
+      {% if error %}
+        <h2 style="font-size:1.5rem;margin-bottom:16px;color:#222;">Authentication</h2>
+        {% if missing_token %}
+          <!-- <p>Please login to <a href="https://app.lunor.quest" target="_blank" rel="noopener">Lunor Quest</a> and then try to submit.</p> -->
+          <p style="font-size:1rem;line-height:1.6;color:#444;">
+            Sign in to 
+            <a href="https://app.lunor.quest" target="_blank" rel="noopener" style="color:#2563eb;font-weight:500;text-decoration:none;">Lunor Quest</a> 
+            and join the competition. Use <strong>Submit Your Solution</strong> there to be auto-logged into Lunor Studio.
+          </p>
+        {% else %}
+          <p style="color:#d33;font-size:1rem;margin-top:8px;">{{ error }}</p>
+        {% endif %}
+      {% else %}
+        <h2 style="font-size:1.5rem;margin-bottom:16px;color:#222;">{{ status }}</h2>
+        <p style="color:#555;">Authenticating from Lunor…</p>
+        <div class="loader" style="margin:20px auto;width:32px;height:32px;border:4px solid #ddd;border-top:4px solid #2563eb;border-radius:50%;animation:spin 1s linear infinite;"></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- <div class="form-wrapper" style="margin-top:16px">
+    <pre style="text-align:left; background:#0b1021; color:#d6d6d6; padding:12px; border-radius:8px; overflow:auto; max-height:220px;">
+Steps:
+{% for step in debug_steps %}- {{ step }}
+{% endfor %}
+
+Using JWT: {{ using_jwt }}
+JWT Header: {{ jwt_header|default:'{}' }}
+Token Payload (sanitized): {{ debug_payload|default:'{}' }}
+    </pre>
+  </div> -->
+
+  {% if not error and redirect %}
+  <script nonce="{{request.csp_nonce}}">
+    setTimeout(function(){ window.location.href = decodeURIComponent("{{ redirect|escapejs }}"); }, 600);
+  </script>
+  {% endif %}
+
+  <style>
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+{% endblock %}
