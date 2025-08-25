@@ -14,6 +14,7 @@ import "./Import.scss";
 import { Button, CodeBlock, SimpleCard, Spinner, Tooltip } from "@humansignal/ui";
 import samples from "./samples.json";
 import { importFiles } from "./utils";
+import { useCurrentUser } from "../../../providers/CurrentUser";
 
 const importClass = cn("upload_page");
 const dropzoneClass = cn("dropzone");
@@ -148,6 +149,12 @@ export const ImportPage = ({
   addColumns,
   openLabelingConfig,
 }) => {
+  const { user } = useCurrentUser();
+  const isOwner = Boolean(user?.isOwner) || (
+    Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
+  );
+  if (!isOwner) return null;
+
   const [error, setError] = useState();
   const api = useAPI();
   const projectConfigured = project?.label_config !== "<View></View>";

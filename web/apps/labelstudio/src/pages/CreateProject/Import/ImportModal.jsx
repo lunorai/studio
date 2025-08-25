@@ -10,8 +10,15 @@ import { Elem } from "../../../utils/bem";
 import { useRefresh } from "../../../utils/hooks";
 import { ImportPage } from "./Import";
 import { useImportPage } from "./useImportPage";
+import { useCurrentUser } from "../../../providers/CurrentUser";
 
 export const Inner = () => {
+  const { user } = useCurrentUser();
+  const isOwner = Boolean(user?.isOwner) || (
+    Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
+  );
+  if (!isOwner) return null;
+
   const history = useHistory();
   const location = useFixedLocation();
   const modal = useRef();

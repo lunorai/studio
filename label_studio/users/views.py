@@ -304,7 +304,7 @@ def user_authenticate(request):
             context['debug_payload'] = sanitized
         except Exception as e:
             debug_steps.append(f'Django-signed token verification error: {e.__class__.__name__}: {e}')
-            context['error'] = 'Invalid or expired token'
+            context['error'] = 'Unable to verify your request. Please try again.'
             return render(request, 'users/new-ui/user_authenticate.html', context)
 
     # Extract fields
@@ -319,7 +319,7 @@ def user_authenticate(request):
 
     if not email:
         debug_steps.append('Email missing in token payload')
-        context['error'] = 'Invalid token payload: email missing'
+        context['error'] = 'Email is missing. Please go to your profile and update your email in <a href="https://app.lunor.quest" target="_blank">Lunor Quest</a>.'
         return render(request, 'users/new-ui/user_authenticate.html', context)
 
     User = get_user_model()

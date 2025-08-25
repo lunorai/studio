@@ -1,19 +1,24 @@
 import { useMemo } from "react";
 import { Menu } from "../Menu/Menu";
+import { useCurrentUserAtom } from "libs/core/src/lib/hooks/useCurrentUser";
 
 export const TabsMenu = ({ onClick, editable = true, closable = true, clonable = true, virtual = false }) => {
+  const { user } = useCurrentUserAtom();
+  const isOwner = Boolean(user?.isOwner) || (
+    Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
+  );
   const items = useMemo(
     () => [
       {
         key: "edit",
         title: "Rename",
-        enabled: editable && !virtual,
+        enabled: isOwner && editable && !virtual,
         action: () => onClick("edit"),
       },
       {
         key: "duplicate",
         title: "Duplicate",
-        enabled: !virtual && clonable,
+        enabled: isOwner && !virtual && clonable,
         action: () => onClick("duplicate"),
         willLeave: true,
       },
@@ -25,7 +30,7 @@ export const TabsMenu = ({ onClick, editable = true, closable = true, clonable =
         willLeave: true,
       },
     ],
-    [editable, closable, clonable, virtual],
+    [editable, closable, clonable, virtual, isOwner],
   );
 
   const showDivider = useMemo(() => closable && items.some(({ enabled }) => enabled), [items]);
