@@ -20,4 +20,13 @@ if __name__ == '__main__':
             'available on your PYTHONPATH environment variable? Did you '
             'forget to activate a virtual environment?'
         ) from exc
+    # Print all environment variables to console on startup
+    print('\n=== Environment variables ===')
+    for key in sorted(os.environ.keys()):
+        try:
+            print(f"{key}={os.environ[key]}")
+        except Exception:
+            # Ensure that a problematic env var doesn't break startup
+            pass
+    print('=== End environment variables ===\n')
     execute_from_command_line(sys.argv)

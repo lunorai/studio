@@ -336,7 +336,34 @@ class CompletedByDMSerializerWithGenericSchema(serializers.PrimaryKeyRelatedFiel
 
 
 class AnnotationsDMFieldSerializer(AnnotationSerializer):
-    completed_by = CompletedByDMSerializerWithGenericSchema(required=False, queryset=User.objects.all())
+    # Return full user object for completed_by to avoid unresolved references on the frontend
+    completed_by = serializers.SerializerMethodField(required=False)
+
+    @staticmethod
+    def _serialize_user(u: User):
+        return {
+            'user_id': u.id,
+            'first_name': u.first_name or '',
+            'last_name': u.last_name or '',
+            'username': u.username or '',
+            'email': u.email or '',
+            'last_activity': (u.last_activity.isoformat() if getattr(u, 'last_activity', None) else ''),
+            'avatar': (u.avatar.url if getattr(u, 'avatar', None) else None),
+            'initials': u.get_initials(False),
+        }
+
+    def get_completed_by(self, obj):
+        user = getattr(obj, 'completed_by', None)
+        if user is None:
+            return None
+        # If already a User instance, serialize directly; otherwise fetch
+        if isinstance(user, User):
+            return self._serialize_user(user)
+        try:
+            u = User.objects.get(pk=user)
+            return self._serialize_user(u)
+        except User.DoesNotExist:
+            return None
 
 
 @extend_schema_field(
@@ -470,6 +497,28 @@ class DataManagerTaskSerializer(TaskSerializer):
             ret.pop('annotations', None)
         if not self.context.get('predictions'):
             ret.pop('predictions', None)
+
+        # Visibility: non-owners should only see their own annotations and themselves in annotators list
+        request = self.context.get('request')
+        if request is not None:
+            user = getattr(request, 'user', None)
+            active_org = getattr(user, 'active_organization', None)
+            is_owner = bool(active_org and active_org.created_by_id == getattr(user, 'id', None))
+            if not is_owner:
+                # Filter annotations to only those completed by current user
+                if 'annotations' in ret and isinstance(ret['annotations'], list):
+                    current_user_id = getattr(user, 'id', None)
+                    ret['annotations'] = [
+                        a for a in ret['annotations']
+                        if ((a.get('completed_by') or {}).get('id') == current_user_id)
+                    ]
+                # Filter annotators list to current user
+                if 'annotators' in ret and isinstance(ret['annotators'], list):
+                    current_user_id = getattr(user, 'id', None)
+                    ret['annotators'] = [
+                        a for a in ret['annotators']
+                        if (isinstance(a, dict) and a.get('user_id') == current_user_id) or a == current_user_id
+                    ]
         return ret
 
     def _pretty_results(self, task, field, unique=False):
@@ -529,9 +578,26 @@ class DataManagerTaskSerializer(TaskSerializer):
         if isinstance(annotators, str):
             annotators = [int(v) for v in annotators.split(',')]
 
-        annotators = list(set(annotators))
-        annotators = [a for a in annotators if a is not None]
-        return annotators if hasattr(obj, 'annotators') and annotators else []
+        # Normalize and keep order stable
+        annotator_ids = [a for a in annotators if a is not None]
+        # Fetch user details for richer frontend rendering (avoids unresolved MST references)
+        users_by_id = {u.id: u for u in User.objects.filter(id__in=annotator_ids)}
+
+        def serialize_user(u):
+            return {
+                'user_id': u.id,
+                'first_name': u.first_name or '',
+                'last_name': u.last_name or '',
+                'username': u.username or '',
+                'email': u.email or '',
+                'last_activity': (u.last_activity.isoformat() if getattr(u, 'last_activity', None) else ''),
+                'avatar': (u.avatar.url if getattr(u, 'avatar', None) else None),
+                'initials': u.get_initials(False),
+            }
+
+        # Return full objects when available; fall back to ids to maintain compatibility
+        result = [serialize_user(users_by_id[uid]) if uid in users_by_id else uid for uid in annotator_ids]
+        return result
 
     def get_annotations_ids(self, task):
         return self._pretty_results(task, 'annotations_ids', unique=True)

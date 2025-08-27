@@ -342,6 +342,19 @@ class ProjectListAPI(generics.ListCreateAPIView):
         projects = Project.objects.filter(organization=self.request.user.active_organization).order_by(
             F('pinned_at').desc(nulls_last=True), '-created_at'
         )
+        # Apply backend visibility rules to mirror frontend visibleProjects logic
+        # Owners (organization creators) can see all projects
+        user = self.request.user
+        active_org = getattr(user, 'active_organization', None)
+        is_owner = bool(active_org and active_org.created_by_id == user.id)
+        if not is_owner:
+            # Non-owners: only active challenges where user's lunor_userId is in participants
+            lunor_user_id = getattr(user, 'lunor_userId', None)
+            # If lunor_userId is missing, return empty queryset for non-owners
+            if lunor_user_id:
+                projects = projects.filter(challenge_status=True, participants__contains=[lunor_user_id])
+            else:
+                projects = projects.none()
         if filter in ['pinned_only', 'exclude_pinned']:
             projects = projects.filter(pinned_at__isnull=filter == 'exclude_pinned')
         return ProjectManager.with_counts_annotate(projects, fields=fields).prefetch_related('members', 'created_by')
@@ -394,7 +407,18 @@ class ProjectCountsListAPI(generics.ListAPIView):
         serializer = GetFieldsSerializer(data=self.request.query_params)
         serializer.is_valid(raise_exception=True)
         fields = serializer.validated_data.get('include')
-        return Project.objects.with_counts(fields=fields).filter(organization=self.request.user.active_organization)
+        projects = Project.objects.with_counts(fields=fields).filter(organization=self.request.user.active_organization)
+        # Apply same visibility filtering as in ProjectListAPI
+        user = self.request.user
+        active_org = getattr(user, 'active_organization', None)
+        is_owner = bool(active_org and active_org.created_by_id == user.id)
+        if not is_owner:
+            lunor_user_id = getattr(user, 'lunor_userId', None)
+            if lunor_user_id:
+                projects = projects.filter(challenge_status=True, participants__contains=[lunor_user_id])
+            else:
+                projects = projects.none()
+        return projects
 
 
 @method_decorator(

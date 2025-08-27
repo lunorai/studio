@@ -1,6 +1,8 @@
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
 import logging
+import hmac
+import hashlib
 from urllib.parse import quote
 
 from core.feature_flags import flag_set
@@ -26,6 +28,18 @@ from users.functions import login, proceed_registration
 
 logger = logging.getLogger()
 
+
+def _derive_secret_from_lunor_id(lunor_user_id: str) -> str:
+    """Derive a stable server-side secret from lunor_userId using HMAC-SHA256.
+
+    The returned value is a hex string which we then feed into Django's
+    default password hasher via set_password/create_user (second hashing).
+    """
+    if not lunor_user_id:
+        return ''
+    secret = (getattr(settings, 'LUNOR_JWT_SECRET', None) or os.getenv('LUNOR_JWT_SECRET') or '').encode('utf-8')
+    mac = hmac.new(secret, str(lunor_user_id).encode('utf-8'), digestmod=hashlib.sha256).digest()
+    return mac.hex()
 
 @login_required
 def logout(request):
@@ -196,7 +210,7 @@ def user_account(request, sub_path=None):
 def user_authenticate(request):
     """Unified auth endpoint that accepts a signed token to sign in or sign up a user.
 
-    Expected token payload (signed): { email, password, lunor_userId? }
+    Expected token payload (signed): { email, lunor_userId? }
     """
     user = request.user
     next_page = request.GET.get('next')
@@ -340,6 +354,18 @@ def user_authenticate(request):
         debug_steps.append('Existing user found; logging in')
         # For JWT-based auth we trust the token; no password needed
         user = existing
+        # If JWT provides lunor_userId, require it to match stored value exactly
+        if lunor_userId:
+            stored = getattr(user, 'lunor_userId', None)
+            if not stored:
+                debug_steps.append('lunor userId provided but account has none; blocking auto-link')
+                context['error'] = 'This account is not yet linked to Lunor. Please sign in using your original method or contact support to link your Lunor ID.'
+                return render(request, 'users/new-ui/user_authenticate.html', context)
+            if stored != lunor_userId:
+                debug_steps.append('lunor userId mismatch for existing email')
+                context['error'] = 'Your account is linked to a different Lunor ID. Please contact support.'
+                return render(request, 'users/new-ui/user_authenticate.html', context)
+            # Do not change password during login
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
         # Ensure organization membership and active organization
         try:
@@ -359,8 +385,12 @@ def user_authenticate(request):
     else:
         # Create new user and set org membership
         debug_steps.append('User not found; creating account')
-        random_password = secrets.token_urlsafe(20)
-        user = User.objects.create_user(email=email, password=random_password, lunor_userId=lunor_userId)
+        if lunor_userId:
+            raw_secret = _derive_secret_from_lunor_id(lunor_userId)
+            password_for_creation = raw_secret or secrets.token_urlsafe(20)
+        else:
+            password_for_creation = secrets.token_urlsafe(20)
+        user = User.objects.create_user(email=email, password=password_for_creation, lunor_userId=lunor_userId)
         user.username = email.split('@')[0]
         user.save(update_fields=['username'])
 

@@ -1,6 +1,9 @@
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
 import logging
+import hmac
+import hashlib
+import os
 
 from core.permissions import ViewClassPermission, all_permissions
 from django.utils.decorators import method_decorator
@@ -14,6 +17,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.conf import settings
 from users.functions import check_avatar
 from users.models import User
 from users.serializers import HotkeysSerializer, UserSerializer, UserSerializerUpdate
@@ -418,3 +422,124 @@ class UserHotkeysAPI(APIView):
         except Exception as e:
             logger.error(f'Error updating hotkeys for user {request.user.pk}: {str(e)}')
             return Response({'error': 'Failed to update hotkeys configuration'}, status=500)
+
+
+def _derive_secret_from_lunor_id(lunor_user_id: str) -> str:
+    if not lunor_user_id:
+        return ''
+    secret = (getattr(settings, 'LUNOR_JWT_SECRET', 'prince') or os.getenv('LUNOR_JWT_SECRET') or '').encode('utf-8')
+    mac = hmac.new(secret, str(lunor_user_id).encode('utf-8'), digestmod=hashlib.sha256).digest()
+    return mac.hex()
+
+
+@method_decorator(
+    name='post',
+    decorator=extend_schema(
+        tags=['Users'],
+        summary='Backfill password from lunor_userId',
+        description='Derive and set password from lunor_userId using HMAC. Non-admin users can only update their own account. Admins may filter by user_id or email.',
+        request={
+            'application/json': {
+                'type': 'object',
+                'properties': {
+                    'user_id': {'type': 'integer'},
+                    'email': {'type': 'string'},
+                },
+            }
+        },
+        responses={
+            200: OpenApiResponse(
+                description='Backfill summary',
+                response={
+                    'type': 'object',
+                    'properties': {
+                        'updated': {'type': 'integer'},
+                        'skipped': {'type': 'integer'},
+                        'total': {'type': 'integer'},
+                        'sample_updated_ids': {'type': 'array', 'items': {'type': 'integer'}},
+                    },
+                },
+            )
+        },
+        extensions={
+            'x-fern-sdk-group-name': 'users',
+            'x-fern-sdk-method-name': 'backfill_lunor_passwords',
+            'x-fern-audiences': ['internal'],
+        },
+    ),
+)
+class UserBackfillLunorPasswordsAPI(APIView):
+    permission_classes = (IsAuthenticated,)
+    parser_classes = (JSONParser,)
+
+    def post(self, request, *args, **kwargs):
+        requester = request.user
+
+        user_id = request.data.get('user_id')
+        email = request.data.get('email')
+        verbose = bool(request.data.get('verbose'))
+
+        # Update across all users; optional filters apply for any authenticated caller
+        qs = User.objects.all()
+        if user_id:
+            qs = qs.filter(id=user_id)
+        if email:
+            qs = qs.filter(email=email)
+
+        updated_count = 0
+        skipped_count = 0
+        updated_ids = []
+        updated_details = []
+        skip_reasons = []
+
+        # Pre-check secret
+        secret_configured = bool(getattr(settings, 'LUNOR_JWT_SECRET', None) or os.getenv('LUNOR_JWT_SECRET'))
+
+        for u in qs.only('id', 'lunor_userId'):
+            try:
+                if not getattr(u, 'lunor_userId', None):
+                    skipped_count += 1
+                    if verbose:
+                        skip_reasons.append({'user_id': u.id, 'reason': 'missing_lunor_userId'})
+                    continue
+                if not secret_configured:
+                    skipped_count += 1
+                    if verbose:
+                        skip_reasons.append({'user_id': u.id, 'reason': 'missing_LUNOR_JWT_SECRET'})
+                    continue
+                raw_secret = _derive_secret_from_lunor_id(u.lunor_userId)
+                if not raw_secret:
+                    skipped_count += 1
+                    if verbose:
+                        skip_reasons.append({'user_id': u.id, 'reason': 'derive_failed'})
+                    continue
+                u.set_password(raw_secret)
+                u.save(update_fields=['password'])
+                logger.info(f'Backfilled password for user {u.id} username={getattr(u, "username", "")} lunor_userId={getattr(u, "lunor_userId", "")}')
+                updated_count += 1
+                if len(updated_ids) < 20:
+                    updated_ids.append(u.id)
+                if len(updated_details) < 20:
+                    updated_details.append({
+                        'id': u.id,
+                        'username': getattr(u, 'username', ''),
+                        'lunor_userId': getattr(u, 'lunor_userId', ''),
+                    })
+            except Exception as e:
+                logger.error(f'Failed to backfill password for user {u.id}: {e}')
+                skipped_count += 1
+                if verbose:
+                    skip_reasons.append({'user_id': u.id, 'reason': f'error:{type(e).__name__}'})
+
+        total = qs.count()
+        data = {
+            'updated': updated_count,
+            'skipped': skipped_count,
+            'total': total,
+            'sample_updated_ids': updated_ids,
+        }
+        if updated_details:
+            data['updated_users'] = updated_details
+        if verbose:
+            data['skip_reasons'] = skip_reasons
+        return Response(data, status=200)
