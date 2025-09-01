@@ -75,7 +75,9 @@ export const PeoplePage = () => {
           <Space>
 
             {isOwner && (isFF(FF_AUTH_TOKENS) && (
-              <Button look="outlined" onClick={showApiTokenSettingsModal} aria-label="Show API token settings">
+              <Button look="outlined" onClick={showApiTokenSettingsModal} aria-label="Show API token settings" 
+              className="hover:!bg-transparent !border-[#EABE00] !text-[#EABE00]"
+              >
                 API Tokens Settings
               </Button>
             ))}
@@ -85,6 +87,7 @@ export const PeoplePage = () => {
                   leading={<IconPlus className="!h-4" />}
                   onClick={() => setInvitationOpen(true)}
                   aria-label="Invite new member"
+                  className="!bg-[#EABE00] !border-[#EABE00]"
                 >
                   Add People
                 </Button>

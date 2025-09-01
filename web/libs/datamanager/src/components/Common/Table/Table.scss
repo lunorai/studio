@@ -18,7 +18,8 @@
     &:hover {
       border: none;
       filter: none;
-      background: var(--color-primary-emphasis-subtle);
+      // background: var(--color-primary-emphasis-subtle);
+      background: #eabe001a;
 
       &__icon {
         color: var(--color-neutral-content);
@@ -27,7 +28,8 @@
 
     &:active {
       color: var(--color-neutral-content);
-      background: linear-gradient(0deg, var(--black_2), var(--black_2)), #FFF;
+      // background: linear-gradient(0deg, var(--black_2), var(--black_2)), #FFF;
+      background: #eabe001a;
       box-shadow: 0 0 5px 0 var(--black_20);
     }
   }
@@ -88,7 +90,8 @@
     }
 
     &:not(.table__row_wrapper_selected):hover {
-      background-color: var(--color-primary-emphasis-subtle);
+      // background-color: var(--color-primary-emphasis-subtle);
+      background-color: #eabe001a;
     }
 
     &_highlighted:not(.table__row_wrapper_selected)::after {

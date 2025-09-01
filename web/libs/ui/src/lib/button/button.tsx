@@ -67,6 +67,16 @@ export function buttonVariant(
   className?: string,
 ) {
   const buttonStyles = [styles.base, variants[variant], looks[look], sizes[size], alignment[align]];
+  // return cn(
+  //   "inline-flex items-center rounded-smaller border text-shadow-button box-border border transition-all",
+  //   "font-medium text-[color:--text-color] bg-[color:--background-color] bg-[image:--background-image] border-[color:--border-color] shadow-[shadow:--emboss-shadow] text-center",
+  //   "hover:text-[color:--text-color] hover:bg-[color:--background-color-hover] hover:border-[color:--border-color-hover]",
+  //   "active:bg-[color:--background-color-active] active:border-[color:--border-color]",
+  //   "[&_svg]:h-full [&_svg]:inline-block [&_svg]:aspect-square",
+  //   ...buttonStyles,
+  //   { [styles.waiting]: waiting },
+  //   className,
+  // );
   return cn(
     "inline-flex items-center rounded-smaller border text-shadow-button box-border border transition-all",
     "font-medium text-[color:--text-color] bg-[color:--background-color] bg-[image:--background-image] border-[color:--border-color] shadow-[shadow:--emboss-shadow] text-center",
@@ -75,6 +85,9 @@ export function buttonVariant(
     "[&_svg]:h-full [&_svg]:inline-block [&_svg]:aspect-square",
     ...buttonStyles,
     { [styles.waiting]: waiting },
+    // 👉 Only apply for primary
+    variant === "primary" &&
+      "!bg-[#EABE00] hover:!bg-transparent !border-[#EABE00] hover:!border-[#EABE00] hover:!text-[#EABE00] !text-white disabled:!bg-transparent focus:outline-none focus:box-shadow-none focus:ring-0",
     className,
   );
 }

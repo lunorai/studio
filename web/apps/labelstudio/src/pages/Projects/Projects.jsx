@@ -31,7 +31,10 @@ export const ProjectsPage = () => {
    - Otherwise, the owner is the account whose email matches active_organization_meta.email.
 
   */
-  const isOwner = !!user && (!user?.active_organization_meta || user?.email === user?.active_organization_meta?.email);
+  const isOwner =
+    !!user &&
+    (!user?.active_organization_meta ||
+      user?.email === user?.active_organization_meta?.email);
   // console.log('User email:', user?.email);
   // console.log('Org owner email:', user?.active_organization_meta?.email);
   // console.log('Has active org:', !!user?.active_organization_meta);
@@ -41,7 +44,9 @@ export const ProjectsPage = () => {
   const [currentPage, setCurrentPage] = useState(getCurrentPage());
   const [totalItems, setTotalItems] = useState(1);
   const setContextProps = useContextProps();
-  const defaultPageSize = Number.parseInt(localStorage.getItem("pages:projects-list") ?? 30);
+  const defaultPageSize = Number.parseInt(
+    localStorage.getItem("pages:projects-list") ?? 30
+  );
 
   const [modal, setModal] = React.useState(false);
 
@@ -52,7 +57,10 @@ export const ProjectsPage = () => {
     if (!isOwner) return; // Don't allow non-owners to open the modal
   };
 
-  const fetchProjects = async (page = currentPage, pageSize = defaultPageSize) => {
+  const fetchProjects = async (
+    page = currentPage,
+    pageSize = defaultPageSize
+  ) => {
     setNetworkState("loading");
     abortController.renew(); // Cancel any in flight requests
 
@@ -125,7 +133,7 @@ export const ProjectsPage = () => {
               ...prevProject,
               ...project,
             };
-          }),
+          })
         );
       }
     }
@@ -144,7 +152,10 @@ export const ProjectsPage = () => {
     // Only show Create button in top-right if:
     // 1. User is an owner, and
     // 2. There are existing projects (otherwise the empty state has a create button)
-    setContextProps({ openModal, showButton: isOwner && projectsList.length > 0 });
+    setContextProps({
+      openModal,
+      showButton: isOwner && projectsList.length > 0,
+    });
   }, [projectsList.length, isOwner]);
 
   return (
@@ -163,7 +174,7 @@ export const ProjectsPage = () => {
               pageSize={defaultPageSize}
             />
           ) : (
-            <EmptyProjectsList openModal={openModal} />
+            <EmptyProjectsList openModal={openModal} isOwner={isOwner} />
           )}
           {modal && <CreateProject onClose={closeModal} />}
         </Elem>
@@ -194,7 +205,12 @@ ProjectsPage.routes = ({ store }) => [
 ProjectsPage.context = ({ openModal, showButton }) => {
   if (!showButton) return null;
   return (
-    <Button onClick={openModal} size="small" aria-label="Create new project">
+    <Button
+      onClick={openModal}
+      size="small"
+      aria-label="Create new project"
+      style={{ backgroundColor: "#EABE00", borderColor: "#EABE00" }}
+    >
       Create
     </Button>
   );

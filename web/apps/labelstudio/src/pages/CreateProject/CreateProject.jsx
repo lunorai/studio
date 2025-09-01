@@ -265,6 +265,7 @@ export const CreateProject = ({ onClose }) => {
               onClick={onCreate}
               waiting={waiting || uploading}
               disabled={!project || uploadDisabled || error}
+              style={{ backgroundColor: "#EABE00", borderColor: "#EABE00" }}
             >
               Save
             </Button>

@@ -97,11 +97,6 @@ export const HomePage: Page = () => {
       })
     : [];
 
-  // console.log("Projects", data);
-  // console.log("Visible Projects", visibleProjects);
-  // console.log("User Lunor Username", userLunorUsername);
-  // console.log("current User", user);
-
   return (
     <main className="p-6">
       <div className="grid grid-cols-[minmax(0,1fr)_450px] gap-6">
@@ -121,7 +116,8 @@ export const HomePage: Page = () => {
                   key={action.title}
                   look="outlined"
                   align="center"
-                  className="flex-grow-0 text-16/24 gap-2 text-primary-content text-left min-w-[250px] [&_svg]:w-6 [&_svg]:h-6 pl-2"
+                  className="flex-grow-0 text-16/24 gap-2 text-primary-content text-left min-w-[250px] [&_svg]:w-6 [&_svg]:h-6 pl-2 hover:!bg-transparent"
+                  style={{ borderColor: "#EABE00", color: "#EABE00" }}
                   onClick={handleActions(action.type)}
                   leading={<action.icon />}
                 >
@@ -136,7 +132,7 @@ export const HomePage: Page = () => {
               data && data?.count > 0 ? (
                 <>
                   Recent Projects{" "}
-                  <a href="/projects" className="text-lg font-normal hover:underline">
+                  <a href="/projects" className="text-lg font-normal hover:underline" style={{ color: "#EABE00" }}>
                     View All
                   </a>
                 </>
@@ -150,11 +146,33 @@ export const HomePage: Page = () => {
             ) : isError ? (
               <div className="h-64 flex justify-center items-center">can't load projects</div>
             ) : isSuccess && (!data || !visibleProjects || visibleProjects.length === 0) ? (
-              <div className="flex flex-col justify-center items-center border border-primary-border-subtle bg-primary-emphasis-subtle rounded-lg h-64">
+              // <div className="flex flex-col justify-center items-center border border-primary-border-subtle bg-primary-emphasis-subtle rounded-lg h-64">
+              //   <div
+              //     className={
+              //       "rounded-full w-12 h-12 flex justify-center items-center bg-accent-grape-subtle text-primary-icon"
+              //     }
+              //   >
+              //     <IconFolderOpen />
+              //   </div>
+              //   <Typography variant="headline" size="small">
+              //     {isOwner ? "Create your first project" : "No projects available"}
+              //   </Typography>
+              //   <Typography size="small" className="text-neutral-content-subtler">
+              //     {isOwner
+              //       ? "Import your data and set up the labeling interface to start annotating"
+              //       : "Contact your organization owner to get access to projects"
+              //     }
+              //   </Typography>
+              //   {isOwner && (
+              //     <Button className="mt-4" onClick={() => setCreationDialogOpen(true)} aria-label="Create new project" style={{ borderColor: "#EABE00" }}>
+              //       Create Project
+              //     </Button>
+              //   )}
+              // </div>
+              <div className="flex flex-col justify-center items-center rounded-lg h-64" style={{ borderColor: "#EABE00", borderWidth: "1px", borderStyle: "solid" }}>
                 <div
-                  className={
-                    "rounded-full w-12 h-12 flex justify-center items-center bg-accent-grape-subtle text-primary-icon"
-                  }
+                  style={{ backgroundColor: "#FFE680", color: "#7A5100" }}
+                  className="rounded-full w-12 h-12 flex justify-center items-center"
                 >
                   <IconFolderOpen />
                 </div>
@@ -168,11 +186,17 @@ export const HomePage: Page = () => {
                   }
                 </Typography>
                 {isOwner && (
-                  <Button className="mt-4" onClick={() => setCreationDialogOpen(true)} aria-label="Create new project">
+                  <Button
+                    className="mt-4"
+                    onClick={() => setCreationDialogOpen(true)}
+                    aria-label="Create new project"
+                    style={{ borderColor: "#EABE00", backgroundColor: "#EABE00", color: "#fff" }}
+                  >
                     Create Project
                   </Button>
                 )}
               </div>
+
             ) : isSuccess && visibleProjects && visibleProjects.length > 0 ? (
               <div className="flex flex-col gap-1">
                 {visibleProjects.map((project) => {
