@@ -144,7 +144,7 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
               alt="Lunor Studio Logo"
               className={`${menubarClass.elem("logo")} w-8 h-8`}
             />
-            <span className="text-white font-medium whitespace-nowrap">
+            <span className="logo-name">
               Lunor Studio
             </span>
             <div className="ml-auto">

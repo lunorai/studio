@@ -152,7 +152,7 @@ export const Preview = ({ config, data, error, loading, project }) => {
           ))}
         </div>
       )}
-      {!data && loading && <Spinner style={{ width: "100%", height: "50vh" }} />}
+      {!data && loading && <h1>Loading...</h1>}
       <div id="label-studio" className={configClass.elem("preview-ui")} ref={rootRef} />
     </div>
   );

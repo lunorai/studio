@@ -9,13 +9,13 @@
     transition: border 400ms ease-out;
 
     & .main-menu {
-      background: var(--color-neutral-background);
+      background: transparent;
 
       &__item {
-        background: var(--color-neutral-background);
+        background: transparent;
 
         &_active {
-          background: var(--color-primary-emphasis-subtle);
+          background: #eabe001a;
           pointer-events: all;
         }
       }

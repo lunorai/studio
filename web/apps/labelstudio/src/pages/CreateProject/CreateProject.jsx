@@ -107,7 +107,7 @@ const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, 
               )}
               target="_blank"
               rel="noreferrer"
-              className="underline hover:no-underline"
+              className="underline hover:no-underline text-[#EABE00]"
             >
               Learn more
             </a>

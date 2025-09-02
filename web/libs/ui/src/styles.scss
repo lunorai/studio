@@ -8,3 +8,15 @@
 @import './tokens/colors';
 
 // Additional global styles can be added here
+
+a {
+    color: #EABE00 !important;
+    text-decoration: none !important;
+    transition: color 0.2s ease-in-out; /* smooth effect */
+  }
+  
+  a:hover,
+  a:focus {
+    color: #FFD633 !important; /* lighter shade of gold */
+  }
+  

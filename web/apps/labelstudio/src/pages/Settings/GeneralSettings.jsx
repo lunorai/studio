@@ -52,7 +52,7 @@ export const GeneralSettings = () => {
                         },
                       )}
                       rel="noreferrer"
-                      className="underline hover:no-underline"
+                      className="underline hover:no-underline text-[#EABE00]"
                     >
                       Learn more
                     </a>
@@ -96,6 +96,7 @@ export const GeneralSettings = () => {
                             treatment: "workspaces",
                           })}
                           rel="noreferrer"
+                          className="!text-[#EABE00]"
                         >
                           Learn more
                         </a>

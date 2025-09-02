@@ -3,24 +3,24 @@
 
 {% block user_content %}
   <div class="auth-container" style="display:flex;justify-content:center;align-items:center;min-height:60vh;">
-    <div class="auth-card" style="max-width:480px;width:100%;background:#fff;padding:32px;border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,0.1);text-align:center;">
+    <div class="auth-card" style="max-width:480px;width:100%;background:var(--card-bg);padding:32px;border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,0.1);text-align:center;">
       
       {% if error %}
-        <h2 style="font-size:1.5rem;margin-bottom:16px;color:#222;">Authentication</h2>
+        <h2 style="font-size:1.5rem;margin-bottom:16px;color:var(--heading-color);">Authentication</h2>
         {% if missing_token %}
           <!-- <p>Please login to <a href="https://app.lunor.quest" target="_blank" rel="noopener">Lunor Quest</a> and then try to submit.</p> -->
-          <p style="font-size:1rem;line-height:1.6;color:#444;">
+          <p style="font-size:1rem;line-height:1.6;color:var(--text-color);">
             Sign in to 
-            <a href="https://app.lunor.quest" target="_blank" rel="noopener" style="color:#2563eb;font-weight:500;text-decoration:none;">Lunor Quest</a> 
+            <a href="https://app.lunor.quest" target="_blank" rel="noopener" style="color:#EABE00;font-weight:500;text-decoration:none;">Lunor Quest</a> 
             and join the competition. Use <strong>Submit Your Solution</strong> there to be auto-logged into Lunor Studio.
           </p>
         {% else %}
-          <p style="color:#d33;font-size:1rem;margin-top:8px;">{{ error }}</p>
+        <p style="color:#d33;font-size:1rem;margin-top:8px;" class="error-text">{{ error|safe }}</p>
         {% endif %}
       {% else %}
-        <h2 style="font-size:1.5rem;margin-bottom:16px;color:#222;">{{ status }}</h2>
-        <p style="color:#555;">Authenticating from Lunor…</p>
-        <div class="loader" style="margin:20px auto;width:32px;height:32px;border:4px solid #ddd;border-top:4px solid #2563eb;border-radius:50%;animation:spin 1s linear infinite;"></div>
+        <h2 style="font-size:1.5rem;margin-bottom:16px;color:var(--heading-color);">{{ status }}</h2>
+        <p style="color:var(--subtext-color);">Authenticating from Lunor…</p>
+        <div class="loader" style="margin:20px auto;width:32px;height:32px;border:4px solid #ddd;border-top:4px solid #EABE00;border-radius:50%;animation:spin 1s linear infinite;"></div>
       {% endif %}
     </div>
   </div>
@@ -43,10 +43,104 @@ Token Payload (sanitized): {{ debug_payload|default:'{}' }}
   </script>
   {% endif %}
 
+  <!-- Theme toggle button (bottom-right) -->
+  <button id="themeToggleBtn" style="
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--button-bg);
+    color: var(--button-text);
+    border: none;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    z-index: 1000;
+  ">🌙</button>
+
   <style>
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
+
+    /* Light mode vars */
+    [data-color-scheme="light"] {
+      --card-bg: #fff;
+      --heading-color: #222;
+      --text-color: #444;
+      --subtext-color: #555;
+      --button-bg: #f0f0f0;
+      --button-text: #222;
+    }
+
+    /* Dark mode vars */
+    [data-color-scheme="dark"] {
+      --card-bg: #1e1e1e;
+      --heading-color: #f5f5f5;
+      --text-color: #ccc;
+      --subtext-color: #aaa;
+      --button-bg: #333;
+      --button-text: #f5f5f5;
+    }
+
+    .error-text a {
+      color: #EABE00;
+      text-decoration: underline;
+      font-weight: 500;
+    }
+    .error-text a:hover {
+      color: #f5d84f; /* a lighter shade for hover */
+    }
   </style>
+
+  <!-- <script>
+    const btn = document.getElementById("themeToggleBtn");
+
+    function updateIcon(mode) {
+      btn.textContent = mode === "light" ? "🌙" : "🌞";
+    }
+
+    btn.addEventListener("click", () => {
+      const html = document.documentElement;
+      const current = html.getAttribute("data-color-scheme") || "light";
+      const next = current === "light" ? "dark" : "light";
+      html.setAttribute("data-color-scheme", next);
+      // localStorage.setItem("color-scheme", next);
+      localStorage.setItem("preferred-color-scheme", next);
+      updateIcon(next);
+    });
+
+    // On page load → apply saved theme
+    const saved = localStorage.getItem("preferred-color-scheme") || "light";
+    document.documentElement.setAttribute("data-color-scheme", saved);
+    updateIcon(saved);
+  </script> -->
+  <script>
+    const btn = document.getElementById("themeToggleBtn");
+  
+    function updateIcon(mode) {
+      mode = (mode || "light").toLowerCase();  // normalize
+      btn.textContent = mode === "light" ? "🌙" : "🌞";
+    }
+  
+    btn.addEventListener("click", () => {
+      const html = document.documentElement;
+      const current = (html.getAttribute("data-color-scheme") || "light").toLowerCase();
+      const next = current === "light" ? "dark" : "light";
+      html.setAttribute("data-color-scheme", next);
+      localStorage.setItem("preferred-color-scheme", next);
+      updateIcon(next);
+    });
+  
+    // On page load → apply saved theme (case-insensitive)
+    const saved = (localStorage.getItem("preferred-color-scheme") || "light").toLowerCase();
+    document.documentElement.setAttribute("data-color-scheme", saved);
+    updateIcon(saved);
+  </script>
 {% endblock %}

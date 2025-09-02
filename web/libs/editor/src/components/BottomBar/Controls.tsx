@@ -286,6 +286,7 @@ export const Controls = controlsInjector<{ annotation: MSTAnnotation }>(
                 name="submit"
                 className="w-[150px]"
                 disabled={isUpdateDisabled}
+                style={isUpdate? 'color: #EABE00;' : ''}
                 onClick={async (event) => {
                   if ((event.target as HTMLButtonElement).classList.contains(dropdownTrigger)) return;
                   const selected = store.annotationStore?.selected;

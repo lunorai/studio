@@ -210,7 +210,7 @@ def user_account(request, sub_path=None):
 def user_authenticate(request):
     """Unified auth endpoint that accepts a signed token to sign in or sign up a user.
 
-    Expected token payload (signed): { email, lunor_userId? }
+    Expected token payload (signed): { email, lunor_userId }
     """
     user = request.user
     next_page = request.GET.get('next')
@@ -242,14 +242,12 @@ def user_authenticate(request):
 
     if not token:
         debug_steps.append('No token in query string')
-        context['error'] = 'Please login to Lunor Quest url https://app.lunor.quest and then come try to sumbit'
+        context['error'] = 'Please login to Lunor Quest url https://app.lunor.quest and then try again.'
         context['missing_token'] = True
         return render(request, 'users/new-ui/user_authenticate.html', context)
 
     # Attempt JWT decode first; fallback to Django-signed token for backward compatibility
     payload = None
-    email = None
-    lunor_userId = None
     using_jwt = False
 
     LUNOR_JWT_ENABLED = getattr(settings, 'LUNOR_JWT_ENABLED', os.getenv('LUNOR_JWT_ENABLED', 'true').lower() in ('1','true','yes'))
@@ -271,7 +269,6 @@ def user_authenticate(request):
                 debug_steps.append('Attempting JWT verification via shared secret')
                 key = shared_secret
             else:
-                # Fallback for HS256 in dev: use Django SECRET_KEY if no explicit key provided
                 try:
                     header = jwt.get_unverified_header(token)
                     context['jwt_header'] = header
@@ -294,7 +291,6 @@ def user_authenticate(request):
                 )
                 using_jwt = True
                 context['using_jwt'] = True
-                # Expose sanitized payload for debug
                 sanitized = dict(payload)
                 if 'password' in sanitized:
                     sanitized['password'] = '***'
@@ -304,7 +300,6 @@ def user_authenticate(request):
             payload = None
 
     if payload is None:
-        # Try Django signed token
         try:
             debug_steps.append('Attempting Django-signed token verification')
             payload = signing.loads(
@@ -333,47 +328,49 @@ def user_authenticate(request):
 
     if not email:
         debug_steps.append('Email missing in token payload')
-        context['error'] = 'Email is missing. Please go to your profile and update your email in <a href="https://app.lunor.quest" target="_blank">Lunor Quest</a>.'
+        context['error'] = 'Email is missing. Please update your profile email in <a href="https://app.lunor.quest" target="_blank">Lunor Quest</a>.'
+        return render(request, 'users/new-ui/user_authenticate.html', context)
+
+    # 🚨 Strict requirement: lunor_userId must exist
+    if not lunor_userId:
+        debug_steps.append('Lunor userId missing in token payload')
+        context['error'] = 'Your Lunor ID is required for login. Please re-login from <a href="https://app.lunor.quest" target="_blank">Lunor Quest</a>.'
         return render(request, 'users/new-ui/user_authenticate.html', context)
 
     User = get_user_model()
-    
+
     # Check if lunor_userId is already linked to another account
-    if lunor_userId:
-        existing_user_with_lunor_id = User.objects.filter(lunor_userId=lunor_userId).first()
-        if existing_user_with_lunor_id and existing_user_with_lunor_id.email != email:
-            # Mask email for privacy: show first 3 chars + ...@
-            masked_email = existing_user_with_lunor_id.email[:3] + '...@' + existing_user_with_lunor_id.email.split('@')[1]
-            debug_steps.append(f'lunor_userId already linked to account {masked_email}')
-            context['error'] = f'This account is already linked to another user ({masked_email}). Please contact support.'
-            return render(request, 'users/new-ui/user_authenticate.html', context)
+    existing_user_with_lunor_id = User.objects.filter(lunor_userId=lunor_userId).first()
+    if existing_user_with_lunor_id and existing_user_with_lunor_id.email != email:
+        masked_email = existing_user_with_lunor_id.email[:3] + '...@' + existing_user_with_lunor_id.email.split('@')[1]
+        debug_steps.append(f'lunor_userId already linked to account {masked_email}')
+        context['error'] = f'This account is already linked to another user ({masked_email}). Please contact support.'
+        return render(request, 'users/new-ui/user_authenticate.html', context)
 
     existing = User.objects.filter(email=email).first()
 
     if existing:
         debug_steps.append('Existing user found; logging in')
-        # For JWT-based auth we trust the token; no password needed
         user = existing
-        # If JWT provides lunor_userId, require it to match stored value exactly
-        if lunor_userId:
-            stored = getattr(user, 'lunor_userId', None)
-            if not stored:
-                debug_steps.append('lunor userId provided but account has none; blocking auto-link')
-                context['error'] = 'This account is not yet linked to Lunor. Please sign in using your original method or contact support to link your Lunor ID.'
-                return render(request, 'users/new-ui/user_authenticate.html', context)
-            if stored != lunor_userId:
-                debug_steps.append('lunor userId mismatch for existing email')
-                context['error'] = 'Your account is linked to a different Lunor ID. Please contact support.'
-                return render(request, 'users/new-ui/user_authenticate.html', context)
-            # Do not change password during login
+
+        stored = getattr(user, 'lunor_userId', None)
+        if not stored:
+            debug_steps.append('Account exists but has no lunor_userId; blocking login')
+            context['error'] = 'This account is not linked to Lunor. Please contact support to link your Lunor ID.'
+            return render(request, 'users/new-ui/user_authenticate.html', context)
+
+        if stored != lunor_userId:
+            debug_steps.append('lunor_userId mismatch for existing email')
+            context['error'] = 'Your account is linked to a different Lunor ID. Please contact support.'
+            return render(request, 'users/new-ui/user_authenticate.html', context)
+
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-        # Ensure organization membership and active organization
+
         try:
             org_pk = Organization.find_by_user(user).pk
             user.active_organization_id = org_pk
             user.save(update_fields=['active_organization'])
         except Exception:
-            # Fallback: add to or create default organization
             if Organization.objects.exists():
                 org = Organization.objects.first()
                 org.add_user(user)
@@ -381,16 +378,24 @@ def user_authenticate(request):
                 org = Organization.create_organization(created_by=user, title='Label Studio')
             user.active_organization = org
             user.save(update_fields=['active_organization'])
+
         context['status'] = 'Signed in. Redirecting…'
+
     else:
-        # Create new user and set org membership
         debug_steps.append('User not found; creating account')
-        if lunor_userId:
-            raw_secret = _derive_secret_from_lunor_id(lunor_userId)
-            password_for_creation = raw_secret or secrets.token_urlsafe(20)
-        else:
-            password_for_creation = secrets.token_urlsafe(20)
-        user = User.objects.create_user(email=email, password=password_for_creation, lunor_userId=lunor_userId)
+
+        # 🚨 Always derive password from lunor_userId
+        password_for_creation = _derive_secret_from_lunor_id(lunor_userId)
+        if not password_for_creation:
+            debug_steps.append('Failed to derive password from lunor_userId')
+            context['error'] = 'Unable to create account because your Lunor ID is invalid. Please contact support.'
+            return render(request, 'users/new-ui/user_authenticate.html', context)
+
+        user = User.objects.create_user(
+            email=email,
+            password=password_for_creation,
+            lunor_userId=lunor_userId
+        )
         user.username = email.split('@')[0]
         user.save(update_fields=['username'])
 

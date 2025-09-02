@@ -412,10 +412,10 @@ export const ImportPage = ({
                               href="https://labelstud.io/tags/video#Video-format"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center"
+                              className="inline-flex items-center text-[#EABE00]"
                               aria-label="Learn more about video format support (opens in a new tab)"
                             >
-                              <IconInfoOutline className="w-4 h-4 text-primary-content hover:text-primary-content-hover" />
+                              <IconInfoOutline className="w-4 h-4 text-[#EABE00] hover:text-[#eabe001a]" />
                             </a>
                           </Tooltip>
                         </div>

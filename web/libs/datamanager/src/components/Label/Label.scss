@@ -18,7 +18,8 @@
     transform: translate(-50%, -50%);
     box-shadow: 0 5px 20px var(--black_20);
 
-    @include waiting(var(--color-primary-surface));
+    // @include waiting(var(--color-primary-surface));
+    @include waiting(#EABE00);
   }
 
   &__header {
