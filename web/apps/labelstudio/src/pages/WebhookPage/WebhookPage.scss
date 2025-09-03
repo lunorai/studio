@@ -43,6 +43,11 @@
       color: #EABE00;
       text-decoration: underline;
     }
+
+    & a:hover {
+      color: #EABE00;
+      text-decoration: none;
+    }
   }
 
   &__footer-icon {

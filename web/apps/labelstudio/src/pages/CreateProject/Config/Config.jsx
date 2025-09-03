@@ -476,7 +476,7 @@ const Configurator = ({
     <p className={configClass.elem("tags-link")}>
       Configure the labeling interface with tags.
       <br />
-      <a href="https://labelstud.io/tags/" target="_blank" rel="noreferrer" className="text-[#EABE00]">
+      <a href="https://labelstud.io/tags/" target="_blank" rel="noreferrer" className="!text-[#EABE00] hover:!text-[#EABE00] ">
         See all available tags
       </a>
       .

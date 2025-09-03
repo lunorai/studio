@@ -114,7 +114,7 @@ export const MachineLearningSettings = () => {
               <div>
                 Need help?
                 <br />
-                <a href="https://labelstud.io/guide/ml" target="_blank" rel="noreferrer" className="text-[#EABE00]">
+                <a href="https://labelstud.io/guide/ml" target="_blank" rel="noreferrer" className="!text-[#EABE00] hover:!text-[#EABE00]">
                   Learn more about connecting models in our docs
                 </a>
               </div>
