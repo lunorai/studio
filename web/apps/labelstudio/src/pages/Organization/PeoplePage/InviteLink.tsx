@@ -63,7 +63,7 @@ const InvitationModal = () => {
           href="https://labelstud.io/guide/signup.html"
           target="_blank"
           rel="noreferrer"
-          className="hover:underline"
+          className="hover:underline text-[#EABE00]"
           onClick={() =>
             __lsa("docs.organization.add_people.learn_more", {
               href: "https://labelstud.io/guide/signup.html",

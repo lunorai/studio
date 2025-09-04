@@ -84,14 +84,14 @@ export const TemplatesList = ({ selectedGroup, selectedRecipe, onCustomTemplate,
         </Button>
       </aside>
       <main>
-        {!templates && <Spinner style={{ width: "100%", height: 200 }} />}
+        {!templates && <h2 className="text-center">Loading...</h2>}
         <TemplatesInGroup templates={templates || []} group={selected} onSelectRecipe={onSelectRecipe} />
       </main>
       <footer className="flex items-center justify-center gap-1">
         <IconInfo className={listClass.elem("info-icon")} width="20" height="20" />
         <span>
           See the documentation to{" "}
-          <a href="https://labelstud.io/guide" target="_blank" rel="noreferrer">
+          <a href="https://labelstud.io/guide" target="_blank" rel="noreferrer" className="text-[#EABE00]">
             contribute a template
           </a>
           .

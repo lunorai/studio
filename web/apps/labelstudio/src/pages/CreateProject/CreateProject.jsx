@@ -16,6 +16,7 @@ import { useDraftProject } from "./utils/useDraftProject";
 import { Input, TextArea } from "../../components/Form";
 import { FF_LSDV_E_297, isFF } from "../../utils/feature-flags";
 import { createURL } from "../../components/HeidiTips/utils";
+import { useCurrentUser } from "../../providers/CurrentUser";
 
 const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, setDescription, show = true, challengeId, setChallengeId, round, setRound }) =>
   !show ? null : (
@@ -106,7 +107,7 @@ const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, 
               )}
               target="_blank"
               rel="noreferrer"
-              className="underline hover:no-underline"
+              className="underline hover:no-underline text-[#EABE00]"
             >
               Learn more
             </a>
@@ -118,6 +119,12 @@ const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, 
   );
 
 export const CreateProject = ({ onClose }) => {
+  const { user } = useCurrentUser();
+  const isOwner = Boolean(user?.isOwner) || (
+    Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
+  );
+  if (!isOwner) return null;
+
   const [step, _setStep] = React.useState("name"); // name | import | config
   const [waiting, setWaitingStatus] = React.useState(false);
 
@@ -258,6 +265,7 @@ export const CreateProject = ({ onClose }) => {
               onClick={onCreate}
               waiting={waiting || uploading}
               disabled={!project || uploadDisabled || error}
+              style={{ backgroundColor: "#EABE00", borderColor: "#EABE00" }}
             >
               Save
             </Button>

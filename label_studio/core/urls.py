@@ -38,7 +38,7 @@ urlpatterns = [
         r'^sw-fallback\.js$',
         views.static_file_with_host_resolver('static/js/sw-fallback.js', content_type='text/javascript'),
     ),
-    re_path(r'^favicon\.ico$', RedirectView.as_view(url='/static/images/favicon.ico', permanent=True)),
+    re_path(r'^favicon\.ico$', RedirectView.as_view(url='https://app.lunor.quest/Lunor.png', permanent=True)),
     re_path(
         r'^label-studio-frontend/(?P<path>.*)$',
         serve,

@@ -57,12 +57,14 @@
 
     &:not(.main-menu__item_look_danger):hover {
       color: var(--color-neutral-content);
-      background: var(--color-primary-emphasis-subtle);
+      // background: var(--color-primary-emphasis-subtle);
+      background: #eabe001a;
     }
 
     &:not(.main-menu__item_active):hover {
       color: var(--color-neutral-content);
-      background: var(--color-primary-emphasis-subtle);
+      // background: var(--color-primary-emphasis-subtle);
+      background: #eabe001a;
     }
 
     &_active {
@@ -72,7 +74,7 @@
 
     &_active:not(.sidebar__pin) {
       pointer-events: none;
-      background: var(--color-neutral-emphasis);
+      background: #eabe001a;
     }
 
     &:hover &-icon,
@@ -85,7 +87,8 @@
 
       &:hover {
         color: var(--color-neutral-content) !important;
-        background-color: var(--color-negative-emphasis-subtle) !important;
+        // background-color: var(--color-negative-emphasis-subtle) !important;
+        background-color: #eabe001a !important;
       }
     }
   }
@@ -140,7 +143,8 @@
     cursor: pointer;
 
     &:hover {
-      background-color: var(--color-primary-emphasis-subtle);
+      // background-color: var(--color-primary-emphasis-subtle);
+      background-color: #eabe001a;
     }
 
     &_dangerous {
@@ -148,7 +152,8 @@
 
       &:hover {
         color: var(--color-neutral-content);
-        background-color: var(--color-negative-emphasis-subtle);
+        // background-color: var(--color-negative-emphasis-subtle);
+        background-color: #eabe001a;
       }
     }
   }

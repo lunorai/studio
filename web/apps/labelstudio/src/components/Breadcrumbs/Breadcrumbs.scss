@@ -49,7 +49,7 @@
         color: var(--color-neutral-content-subtler);
 
         &:hover {
-          color: var(--color-primary-content-hover);
+          color: #EABE00;
         }
       }
     }
@@ -72,7 +72,7 @@
   &__item > span,
   &__item > a {
     text-decoration: none;
-    color: var(--color-neutral-content);
+    color: #EABE00;
 
     a {
       color: var(--color-primary-content);
@@ -90,7 +90,7 @@
     content: "/";
     height: 16px;
     display: block;
-    color: var(--color-neutral-content-subtlest);
+    color: #EABE00;
     position: absolute;
     transform: translate3d(0, -50%, 0);
     text-align: center;

@@ -1,0 +1,202 @@
+Label Studio – Database Tables Overview
+
+This document summarizes the main Django ORM models (tables), their purpose, key fields, and relationships. Table names come from each model's Meta.db_table when set; otherwise Django’s default naming applies. Relationships use Django FK/M2M/OneToOne semantics.
+
+Users
+- htx_user (users.models.User)
+  - Purpose: Core user accounts, auth, profile, and activity.
+  - Key fields: email (unique), username, first_name, last_name, phone, avatar, custom_hotkeys (JSON), is_staff, is_active, date_joined, activity_at, last_activity, active_organization (FK organizations.Organization), allow_newsletters.
+  - Indexes: username, email, first_name, last_name, date_joined.
+  - Relations: 1–M to projects.Project (created_by), tasks.Annotation/AnnotationDraft (completed_by/updated_by/user), tasks.Task (updated_by), organizations via M2M.
+
+Organizations
+- organization (organizations.models.Organization)
+  - Purpose: Multi-tenant org container for users, projects, and settings.
+  - Key fields: title, token (invite), created_by (User), contact_info, created_at/updated_at.
+  - Relations: users M2M through organizations.OrganizationMember; 1–M projects.Project.
+
+- organizations_organizationmember (organizations.models.OrganizationMember)
+  - Purpose: Membership records connecting users to organizations, with soft delete.
+  - Key fields: user (FK User), organization (FK Organization), deleted_at, created_at/updated_at.
+
+Projects
+- project (projects.models.Project)
+  - Purpose: The main labeling project entity and configuration.
+  - Key fields: title, description, organization (FK), label_config (XML), parsed_label_config (JSON), label_config_hash, expert_instruction, flags (show_* booleans), token, maximum_annotations, min_annotations_to_start_training, control_weights (JSON), model_version, data_types (JSON), is_draft, is_published, sampling, skip_queue, overlap display flags, pinned_at, custom_task_lock_ttl, participants (JSON), challenge_id, round, challenge_status.
+  - Counters: result_count; timestamps.
+  - Search: search_vector (PG only, generated).
+  - Indexes: (pinned_at, created_at).
+  - Relations: created_by (User), organization (Organization), tasks.Task (1–M), annotations, ML backends, imports/exports, summaries, members.
+
+- projects_projectonboardingsteps
+  - Purpose: Catalog of onboarding steps.
+  - Key fields: code, title, description, order, created_at/updated_at.
+  - Ordering: by order.
+
+- projects_projectonboarding
+  - Purpose: Tracks which onboarding steps a project has completed.
+  - Key fields: step (FK ProjectOnboardingSteps), project (FK Project), finished, created_at/updated_at.
+
+- projects_labelstreamhistory
+  - Purpose: Per-user project stream history.
+  - Key fields: user (FK User), project (FK Project), data (JSON). Unique (user, project).
+
+- projects_projectmember
+  - Purpose: Explicit per-project member assignment and enable flag.
+  - Key fields: user (FK User), project (FK Project), enabled, timestamps.
+
+- projects_projectsummary
+  - Purpose: Aggregated per-project data/annotation schema statistics.
+  - Key fields: project (AutoOneToOne FK Project, PK), created_at, all_data_columns (JSON), common_data_columns (JSON), created_annotations (JSON), created_labels (JSON), created_labels_drafts (JSON).
+
+- projects_projectimport
+  - Purpose: Import job tracking for bulk data ingest.
+  - Key fields: project (FK), status, url, traceback, error, timestamps (created/updated/finished), task_count, annotation_count, prediction_count, duration, file_upload_ids (JSON), could_be_tasks_list (bool), found_formats (JSON), data_columns (JSON), tasks (JSON), task_ids (JSON).
+
+- projects_projectreimport
+  - Purpose: Re-import job tracking.
+  - Key fields: project (FK), status, error, counters, duration, file_upload_ids (JSON), files_as_tasks_list, found_formats (JSON), data_columns (JSON), traceback.
+
+Tasks and Annotations
+- task (tasks.models.Task)
+  - Purpose: A single data item to be labeled.
+  - Key fields: id (AutoField, indexed), data (JSON), meta (JSON), project (FK Project), created_at/updated_at, updated_by (FK User), is_labeled, overlap, file_upload (FK data_import.FileUpload), inner_id, counters: total_annotations, cancelled_annotations, total_predictions, comment counters, comment authors (M2M User), last_comment_updated_at.
+  - Indexes: multiple combining project/id/inner_id/overlap/flags.
+
+- task_completion (tasks.models.Annotation)
+  - Purpose: Annotation result objects.
+  - Key fields: result (JSON), task (FK Task), project (FK Project), completed_by (FK User), updated_by (FK User), was_cancelled, ground_truth, created_at/updated_at, draft_created_at, lead_time, prediction (JSON snapshot), result_count, parent_prediction (FK Prediction), parent_annotation (self-FK), unique_id (UUID), import_id (origin id), last_action (enum), last_created_by (FK User), bulk_created.
+  - Indexes: created_at, ground_truth, id+task, last_action, project+ground_truth/id/was_cancelled, task+completed_by/ground_truth/was_cancelled, was_cancelled.
+
+- tasks_tasklock
+  - Purpose: User task locks to prevent concurrent labeling beyond overlap.
+  - Key fields: task (FK Task), user (FK User), expire_at, unique_id (UUID), created_at.
+
+- tasks_annotationdraft
+  - Purpose: Draft annotations (in-progress work).
+  - Key fields: result (JSON), lead_time, task (FK Task), annotation (FK Annotation), user (FK User), was_postponed, import_id, created_at/updated_at.
+
+Predictions
+- prediction (tasks.models.Prediction)
+  - Purpose: Model predictions attached to tasks/projects.
+  - Key fields: result (JSON, normalized), score, model_version, model (FK ml.MLBackend), model_run (FK ml_models.ModelRun), cluster, neighbors (JSON), mislabeling, task (FK), project (FK), created_at/updated_at.
+
+- tasks_failedprediction
+  - Purpose: Failed prediction records for observability.
+  - Key fields: message, error_type, ml_backend_model (FK ml.MLBackend), model_version, model_run (FK ml_models.ModelRun), project (FK Project), task (FK Task), created_at.
+
+- prediction_meta (tasks.models.PredictionMeta)
+  - Purpose: Optional metadata for predictions or failed predictions (1–1).
+  - Key fields: prediction (O2O), failed_prediction (O2O), inference_time, token counts, costs, extra (JSON).
+  - Constraints: Exactly one of prediction or failed_prediction must be set.
+
+Data Import / Export
+- data_import_fileupload (data_import.models.FileUpload)
+  - Purpose: Tracks user-uploaded source files and derives tasks.
+  - Key fields: user (FK User), project (FK Project), file (FileField), derived properties (url, filepath, format).
+
+- data_export_export (data_export.models.Export)
+  - Purpose: Export artifacts/jobs for a project (status, file link, etc.).
+  - Key fields: see app (Status, type, counters, timestamps). [From codebase]
+
+- data_export_convertedformat (data_export.models.ConvertedFormat)
+  - Purpose: Converted export formats tracking.
+  - Key fields: export (FK), status, export_type/format, traceback, storage. [From codebase]
+
+Data Manager (Views & Filters)
+- data_manager_view (data_manager.models.View)
+  - Purpose: Saved Data Manager view (tab) per project/user.
+  - Key fields: data (JSON), ordering (JSON), order (tab position), selected_items (JSON), filter_group (FK FilterGroup), user (FK User), project (FK Project).
+  - Indexes: (project, order).
+
+- data_manager_filtergroup (data_manager.models.FilterGroup)
+  - Purpose: Logical grouping of filters with conjunction.
+  - Key fields: conjunction, filters (M2M Filter).
+
+- data_manager_filter (data_manager.models.Filter)
+  - Purpose: Filter specification (may be nested one level via parent).
+  - Key fields: parent (self-FK), index (order among roots), column, type, operator, value (JSON).
+
+Webhooks
+- webhook (webhooks.models.Webhook)
+  - Purpose: Organization or project-scoped webhooks for system events.
+  - Key fields: organization (FK), project (FK nullable), url, send_payload, send_for_all_actions, headers (validated JSON), is_active, created_at/updated_at.
+
+- webhook_action (webhooks.models.WebhookAction)
+  - Purpose: Actions enabled for a webhook.
+  - Key fields: webhook (FK), action (enum choice).
+  - Constraints: unique (webhook, action).
+
+Machine Learning Backends & Model Runs
+- ml_mlbackend (ml.models.MLBackend)
+  - Purpose: External ML service configuration per project.
+  - Key fields: state, is_interactive, url, error_message, title, auth_method, basic_auth_user/pass, description, extra_params (JSON), model_version, timeout, project (FK Project), auto_update, created_at/updated_at.
+
+- ml_mlbackendpredictionjob (ml.models.MLBackendPredictionJob)
+  - Purpose: Track prediction jobs kicked off against an ML backend.
+  - Key fields: job_id, ml_backend (FK), model_version, batch_size, created_at/updated_at.
+
+- ml_mlbackendtrainjob (ml.models.MLBackendTrainJob)
+  - Purpose: Track training jobs for an ML backend.
+  - Key fields: job_id, ml_backend (FK), model_version, created_at/updated_at.
+
+- ml_models_modelinterface (ml_models.models.ModelInterface)
+  - Purpose: First-class model registry entry with IO schema and org scope.
+  - Key fields: title, description, created_by (User), organization (FK), skill_name, input_fields (list[str]), output_classes (list[str]), associated_projects (M2M Project), timestamps.
+
+- ml_models_thirdpartymodelversion (ml_models.models.ThirdPartyModelVersion)
+  - Purpose: Versioned third-party model configuration bound to a ModelInterface.
+  - Key fields: parent_model (FK ModelInterface), title, prompt, model_provider_connection (FK), provider (enum), provider_model_id, created_by (User), organization (FK), timestamps.
+
+- ml_models_modelrun (ml_models.models.ModelRun)
+  - Purpose: Execution of a ThirdPartyModelVersion on a project subset; produces Predictions/FailedPredictions and stats.
+  - Key fields: organization (FK), project (FK), model_version (FK ThirdPartyModelVersion), created_by (User), project_subset (enum), status (enum), job_id, total_predictions/total_correct_predictions/total_tasks, created_at/triggered_at/predictions_updated_at/completed_at.
+
+Model Providers
+- ml_model_providers_modelproviderconnection (ml_model_providers.models.ModelProviderConnection)
+  - Purpose: Provider credentials/config scoped to org/user/model.
+  - Key fields: provider (enum), api_key/auth_token, deployment_name/endpoint (Azure), Google creds/project/location, cached_available_models, scope (enum), organization (FK), created_by (User), timestamps, is_internal, budget_limit/last_reset_date/reset_period/total_spent/alert_threshold.
+
+Labels Manager
+- labels_manager_label (labels_manager.models.Label)
+  - Purpose: Custom labels storage (e.g., for dynamic schemas).
+  - Key fields: created_at, updated_at, value(s). [From codebase]
+
+- labels_manager_labellink (labels_manager.models.LabelLink)
+  - Purpose: Connect labels to projects.
+  - Key fields: project (FK Project), label (FK Label). [From codebase]
+
+Auth/JWT and Session Policy
+- jwt_auth_jwtsettings (jwt_auth.models.JWTSettings)
+  - Purpose: Organization-specific JWT configuration for SSO/JWT auth.
+  - Key fields: issuer/audience/algorithms/keys, organization (FK). [From codebase]
+
+- session_policy_sessiontimeoutpolicy (session_policy.models.SessionTimeoutPolicy)
+  - Purpose: Org-specific session lifetime/timeouts.
+  - Key fields: various TTLs and grace, organization (FK). [From codebase]
+
+I/O Storages
+- io_storages base/mixins and links (io_storages.base_models)
+  - StorageInfo: common storage metadata for various providers.
+  - ProjectStorageMixin: project (FK), common flags.
+  - ImportStorageLink / ExportStorageLink: link tasks/exports to storages.
+
+- Provider-specific mixins
+  - S3/GCS/AzureBlob/LocalFiles/Redis mixins define provider credentials: buckets/containers/paths, credentials JSON, recursive flags, presign TTLs, etc. Concrete Import/Export storage tables created per provider app.
+
+Core
+- core_asyncmigrationstatus (core.models.AsyncMigrationStatus)
+  - Purpose: Tracks async migration jobs and metadata.
+  - Key fields: meta (JSON), status, progress, created_at/updated_at. [From codebase]
+
+- core_deletedrow (core.models.DeletedRow)
+  - Purpose: Registry of deleted PKs per table for audit/replication safety.
+  - Key fields: table_name, row_id, deleted_at. [From codebase]
+
+Additional Notes
+- Many models implement has_permission(user) for row-level access control enforced in views/serializers.
+- A number of JSONField columns store dynamic schema/config/counters for flexibility.
+- PostgreSQL-specific indexes/fields (e.g., search_vector) are guarded by connection.vendor checks and applied via async migrations.
+- Where not shown, Django’s default table naming applies: app_model in lowercase.
+
+This overview was generated from the repository’s Django models; consult the model source for exhaustive field definitions and validators.

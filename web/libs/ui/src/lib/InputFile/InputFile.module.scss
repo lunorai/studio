@@ -13,8 +13,9 @@
 }
 
 .labelContent {
-  border: 1px solid var(--color-primary-border);
-  color: var(--color-primary-content);
+  border: 1px solid #EABE00;
+  // color: var(--color-primary-content);
+  color: #EABE00;
   border-radius: var(--corner-radius-smaller);
   display: flex;
   align-items: center;
@@ -39,8 +40,10 @@
   }
 
   & .labelContent:hover {
-    color: var(--color-primary-surface-hover);
-    background-color: var(--color-primary-emphasis-subtle);
+    // color: var(--color-primary-surface-hover);
+    color: #EABE00;
+    // background-color: var(--color-primary-emphasis-subtle);
+    background-color: transparent;
   }
 
   &:focus-within .labelContent {

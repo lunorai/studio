@@ -19,7 +19,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({ icon, header, descriptio
 
   return (
     <div className="flex flex-col items-center justify-center gap-2 p-6 w-full" data-testid="empty-state">
-      <div className="flex items-center justify-center bg-primary-background text-primary-icon rounded-full p-2 mb-2">
+      <div className="flex items-center justify-center bg-[#eabe001a] text-[#EABE00] rounded-full p-2 mb-2">
         {icon}
       </div>
       <div className="flex flex-col items-center w-full gap-1">

@@ -16,8 +16,9 @@ router.register(r'users', api.UserAPI, basename='user')
 urlpatterns = [
     re_path(r'^api/', include(router.urls)),
     # Authentication
-    path('user/login/', views.user_login, name='user-login'),
-    path('user/signup/', views.user_signup, name='user-signup'),
+    path('user/login/', views.user_authenticate, name='user-login'),
+    path('user/signup/', views.user_authenticate, name='user-signup'),
+    path('user/authenticate/', views.user_authenticate, name='user-authenticate'),
     path('user/account/', views.user_account, name='user-account'),
     path('user/account/<sub_path>', views.user_account, name='user-account-anything'),
     re_path(r'^logout/?$', views.logout, name='logout'),
@@ -25,6 +26,8 @@ urlpatterns = [
     path('api/current-user/reset-token/', api.UserResetTokenAPI.as_view(), name='current-user-reset-token'),
     path('api/current-user/token', api.UserGetTokenAPI.as_view(), name='current-user-token'),
     path('api/current-user/whoami', api.UserWhoAmIAPI.as_view(), name='current-user-whoami'),
+    # Admin backfill endpoint
+    path('api/admin/users/backfill-lunor-passwords', api.UserBackfillLunorPasswordsAPI.as_view(), name='admin-backfill-lunor-passwords'),
     # Product tours
     path('api/current-user/product-tour', product_tours_api.ProductTourAPI.as_view(), name='product-tour'),
     path('api/current-user/hotkeys/', api.UserHotkeysAPI.as_view(), name='current-user-hotkeys'),

@@ -1,11 +1,19 @@
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
 import logging
+import hmac
+import hashlib
 from urllib.parse import quote
 
 from core.feature_flags import flag_set
 from core.middleware import enforce_csrf_checks
 from core.utils.common import load_func
+from django.core import signing
+from django.contrib.auth import get_user_model
+import jwt
+from jwt import PyJWKClient
+import secrets
+import os
 from django.conf import settings
 from django.contrib import auth
 from django.contrib.auth.decorators import login_required
@@ -20,6 +28,18 @@ from users.functions import login, proceed_registration
 
 logger = logging.getLogger()
 
+
+def _derive_secret_from_lunor_id(lunor_user_id: str) -> str:
+    """Derive a stable server-side secret from lunor_userId using HMAC-SHA256.
+
+    The returned value is a hex string which we then feed into Django's
+    default password hasher via set_password/create_user (second hashing).
+    """
+    if not lunor_user_id:
+        return ''
+    secret = (getattr(settings, 'LUNOR_JWT_SECRET', None) or os.getenv('LUNOR_JWT_SECRET') or '').encode('utf-8')
+    mac = hmac.new(secret, str(lunor_user_id).encode('utf-8'), digestmod=hashlib.sha256).digest()
+    return mac.hex()
 
 @login_required
 def logout(request):
@@ -184,3 +204,210 @@ def user_account(request, sub_path=None):
         'users/user_account.html',
         {'settings': settings, 'user': user, 'user_profile_form': form, 'token': token},
     )
+
+
+@enforce_csrf_checks
+def user_authenticate(request):
+    """Unified auth endpoint that accepts a signed token to sign in or sign up a user.
+
+    Expected token payload (signed): { email, lunor_userId }
+    """
+    user = request.user
+    next_page = request.GET.get('next')
+
+    # checks if the URL is a safe redirection.
+    if not next_page or not url_has_allowed_host_and_scheme(url=next_page, allowed_hosts=request.get_host()):
+        if flag_set('fflag_all_feat_dia_1777_ls_homepage_short', user):
+            next_page = reverse('main')
+        else:
+            next_page = reverse('projects:project-index')
+
+    if user.is_authenticated:
+        return redirect(next_page)
+
+    token = request.GET.get('token')
+    debug_steps = []
+    debug_steps.append('Page loaded')
+    context = {
+        'next': quote(next_page),
+        'status': 'Authenticating from Lunor…',
+        'redirect': next_page,
+        'error': None,
+        'debug_steps': debug_steps,
+        'debug_payload': None,
+        'jwt_header': None,
+        'using_jwt': False,
+        'auth_page': True,
+    }
+
+    if not token:
+        debug_steps.append('No token in query string')
+        context['error'] = 'Please login to Lunor Quest url https://app.lunor.quest and then try again.'
+        context['missing_token'] = True
+        return render(request, 'users/new-ui/user_authenticate.html', context)
+
+    # Attempt JWT decode first; fallback to Django-signed token for backward compatibility
+    payload = None
+    using_jwt = False
+
+    LUNOR_JWT_ENABLED = getattr(settings, 'LUNOR_JWT_ENABLED', os.getenv('LUNOR_JWT_ENABLED', 'true').lower() in ('1','true','yes'))
+    if LUNOR_JWT_ENABLED:
+        algorithms = getattr(settings, 'LUNOR_JWT_ALGORITHMS', None) or os.getenv('LUNOR_JWT_ALGORITHMS', 'RS256,HS256').split(',')
+        issuer = getattr(settings, 'LUNOR_JWT_ISSUER', None) or os.getenv('LUNOR_JWT_ISSUER')
+        audience = getattr(settings, 'LUNOR_JWT_AUDIENCE', None) or os.getenv('LUNOR_JWT_AUDIENCE')
+        jwks_url = getattr(settings, 'LUNOR_JWKS_URL', None) or os.getenv('LUNOR_JWKS_URL')
+        shared_secret = getattr(settings, 'LUNOR_JWT_SECRET', None) or os.getenv('LUNOR_JWT_SECRET')
+
+        try:
+            key = None
+            if jwks_url:
+                debug_steps.append('Attempting JWT verification via JWKS URL')
+                jwk_client = PyJWKClient(jwks_url)
+                signing_key = jwk_client.get_signing_key_from_jwt(token)
+                key = signing_key.key
+            elif shared_secret:
+                debug_steps.append('Attempting JWT verification via shared secret')
+                key = shared_secret
+            else:
+                try:
+                    header = jwt.get_unverified_header(token)
+                    context['jwt_header'] = header
+                    if header.get('alg') == 'HS256':
+                        debug_steps.append('Attempting JWT verification via Django SECRET_KEY (dev fallback)')
+                        key = settings.SECRET_KEY
+                except Exception:
+                    key = None
+
+            if key is not None:
+                debug_steps.append('Decoding JWT')
+                options = {"verify_aud": audience is not None}
+                payload = jwt.decode(
+                    token,
+                    key=key,
+                    algorithms=algorithms,
+                    audience=audience,
+                    issuer=issuer,
+                    options=options,
+                )
+                using_jwt = True
+                context['using_jwt'] = True
+                sanitized = dict(payload)
+                if 'password' in sanitized:
+                    sanitized['password'] = '***'
+                context['debug_payload'] = sanitized
+        except Exception as e:
+            debug_steps.append(f'JWT verification error: {e.__class__.__name__}: {e}')
+            payload = None
+
+    if payload is None:
+        try:
+            debug_steps.append('Attempting Django-signed token verification')
+            payload = signing.loads(
+                token,
+                salt=getattr(settings, 'AUTHENTICATE_TOKEN_SALT', 'ls-auth-token'),
+                max_age=int(getattr(settings, 'AUTHENTICATE_TOKEN_MAX_AGE', 300)),
+            )
+            sanitized = dict(payload)
+            if 'password' in sanitized:
+                sanitized['password'] = '***'
+            context['debug_payload'] = sanitized
+        except Exception as e:
+            debug_steps.append(f'Django-signed token verification error: {e.__class__.__name__}: {e}')
+            context['error'] = 'Unable to verify your request. Please try again.'
+            return render(request, 'users/new-ui/user_authenticate.html', context)
+
+    # Extract fields
+    email_claim = getattr(settings, 'LUNOR_JWT_EMAIL_CLAIM', None) or os.getenv('LUNOR_JWT_EMAIL_CLAIM', 'email')
+    username_claim = getattr(settings, 'LUNOR_JWT_USERNAME_CLAIM', None) or os.getenv('LUNOR_JWT_USERNAME_CLAIM', 'lunor_userId')
+    subject_as_email = getattr(settings, 'LUNOR_JWT_SUBJECT_AS_EMAIL', None)
+    if subject_as_email is None:
+        subject_as_email = os.getenv('LUNOR_JWT_SUBJECT_AS_EMAIL', 'false').lower() in ('1','true','yes')
+
+    email = (payload.get(email_claim) or (payload.get('sub') if subject_as_email else '') or '').lower()
+    lunor_userId = payload.get(username_claim) or payload.get('preferred_username') or payload.get('username')
+
+    if not email:
+        debug_steps.append('Email missing in token payload')
+        context['error'] = 'Email is missing. Please update your profile email in <a href="https://app.lunor.quest" target="_blank">Lunor Quest</a>.'
+        return render(request, 'users/new-ui/user_authenticate.html', context)
+
+    # 🚨 Strict requirement: lunor_userId must exist
+    if not lunor_userId:
+        debug_steps.append('Lunor userId missing in token payload')
+        context['error'] = 'Your Lunor ID is required for login. Please re-login from <a href="https://app.lunor.quest" target="_blank">Lunor Quest</a>.'
+        return render(request, 'users/new-ui/user_authenticate.html', context)
+
+    User = get_user_model()
+
+    # Check if lunor_userId is already linked to another account
+    existing_user_with_lunor_id = User.objects.filter(lunor_userId=lunor_userId).first()
+    if existing_user_with_lunor_id and existing_user_with_lunor_id.email != email:
+        masked_email = existing_user_with_lunor_id.email[:3] + '...@' + existing_user_with_lunor_id.email.split('@')[1]
+        debug_steps.append(f'lunor_userId already linked to account {masked_email}')
+        context['error'] = f'This account is already linked to another user ({masked_email}). Please contact support.'
+        return render(request, 'users/new-ui/user_authenticate.html', context)
+
+    existing = User.objects.filter(email=email).first()
+
+    if existing:
+        debug_steps.append('Existing user found; logging in')
+        user = existing
+
+        stored = getattr(user, 'lunor_userId', None)
+        if not stored:
+            debug_steps.append('Account exists but has no lunor_userId; blocking login')
+            context['error'] = 'This account is not linked to Lunor. Please contact support to link your Lunor ID.'
+            return render(request, 'users/new-ui/user_authenticate.html', context)
+
+        if stored != lunor_userId:
+            debug_steps.append('lunor_userId mismatch for existing email')
+            context['error'] = 'Your account is linked to a different Lunor ID. Please contact support.'
+            return render(request, 'users/new-ui/user_authenticate.html', context)
+
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+
+        try:
+            org_pk = Organization.find_by_user(user).pk
+            user.active_organization_id = org_pk
+            user.save(update_fields=['active_organization'])
+        except Exception:
+            if Organization.objects.exists():
+                org = Organization.objects.first()
+                org.add_user(user)
+            else:
+                org = Organization.create_organization(created_by=user, title='Label Studio')
+            user.active_organization = org
+            user.save(update_fields=['active_organization'])
+
+        context['status'] = 'Signed in. Redirecting…'
+
+    else:
+        debug_steps.append('User not found; creating account')
+
+        # 🚨 Always derive password from lunor_userId
+        password_for_creation = _derive_secret_from_lunor_id(lunor_userId)
+        if not password_for_creation:
+            debug_steps.append('Failed to derive password from lunor_userId')
+            context['error'] = 'Unable to create account because your Lunor ID is invalid. Please contact support.'
+            return render(request, 'users/new-ui/user_authenticate.html', context)
+
+        user = User.objects.create_user(
+            email=email,
+            password=password_for_creation,
+            lunor_userId=lunor_userId
+        )
+        user.username = email.split('@')[0]
+        user.save(update_fields=['username'])
+
+        if Organization.objects.exists():
+            org = Organization.objects.first()
+            org.add_user(user)
+        else:
+            org = Organization.create_organization(created_by=user, title='Label Studio')
+        user.active_organization = org
+        user.save(update_fields=['active_organization'])
+
+        login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+        context['status'] = 'Account created. Redirecting…'
+
+    return render(request, 'users/new-ui/user_authenticate.html', context)

@@ -6,6 +6,7 @@ import { Modal } from "../../components/Modal/Modal";
 import { Space } from "../../components/Space/Space";
 import { useAPI } from "../../providers/ApiProvider";
 import { useFixedLocation, useParams } from "../../providers/RoutesProvider";
+import { useCurrentUser } from "../../providers/CurrentUser";
 import { BemWithSpecifiContext } from "../../utils/bem";
 import { isDefined } from "../../utils/helpers";
 import "./ExportPage.scss";
@@ -32,6 +33,12 @@ export const ExportPage = () => {
   const location = useFixedLocation();
   const pageParams = useParams();
   const api = useAPI();
+  const { user } = useCurrentUser();
+  const isOwner = Boolean(user?.isOwner) || (
+    Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
+  );
+
+  console.log("isOwner : ",isOwner);
 
   const [previousExports, setPreviousExports] = useState([]);
   const [downloading, setDownloading] = useState(false);
@@ -76,6 +83,7 @@ export const ExportPage = () => {
   };
 
   useEffect(() => {
+    if (!isOwner) return;
     if (isDefined(pageParams.id)) {
       api
         .callApi("previousExports", {
@@ -98,9 +106,11 @@ export const ExportPage = () => {
           setCurrentFormat(formats[0]?.name);
         });
     }
-  }, [pageParams]);
+  }, [pageParams, isOwner]);
 
   return (
+    // Don't render the export UI for non-owners
+    !isOwner ? null : (
     <Modal
       onHide={() => {
         const path = location.pathname.replace(ExportPage.path, "");
@@ -141,6 +151,7 @@ export const ExportPage = () => {
         </Elem>
       </Block>
     </Modal>
+    )
   );
 };
 

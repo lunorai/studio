@@ -2,7 +2,7 @@ import chr from "chroma-js";
 import { format } from "date-fns";
 import { useMemo } from "react";
 import { NavLink } from "react-router-dom";
-import { IconCheck, IconEllipsis, IconMinus, IconSparks } from "@humansignal/icons";
+import { IconCheck, IconEllipsis, IconMinus, IconSparks, IconFolderOpen } from "@humansignal/icons";
 import { Userpic, Button } from "@humansignal/ui";
 import { Dropdown, Menu, Pagination } from "../../components";
 import { Block, Elem } from "../../utils/bem";
@@ -21,7 +21,6 @@ export const ProjectsList = ({ projects, currentPage, totalItems, loadNextPage, 
 
   */
   const isOwner = !!user && (!user?.active_organization_meta || user?.email === user?.active_organization_meta?.email);
-  // console.log('ProjectsList rendered', projects);
 
   // Single source of truth for project visibility logic
   const visibleProjects = useMemo(() => {
@@ -34,10 +33,10 @@ export const ProjectsList = ({ projects, currentPage, totalItems, loadNextPage, 
 
       // And only if they are in participants
       const participants = project.participants;
-      if (!user?.lunor_username || !Array.isArray(participants)) return false;
-      return participants.includes(user.lunor_username);
+      if (!user?.lunor_userId || !Array.isArray(participants)) return false;
+      return participants.includes(user.lunor_userId);
     });
-  }, [projects, isOwner, user?.lunor_username]);
+  }, [projects, isOwner, user?.lunor_userId]);
   // console.log("Visible Projects: ",visibleProjects);
   // console.log("isOwner: ",isOwner);
   // console.log("Projects: ",projects);
@@ -72,7 +71,10 @@ export const ProjectsList = ({ projects, currentPage, totalItems, loadNextPage, 
 export const EmptyProjectsList = ({ openModal, isOwner = true }) => {
   return (
     <Block name="empty-projects-page">
-      <Elem name="heidi" tag="img" src={absoluteURL("/static/images/opossum_looking.png")} onError={e => { e.target.style.display = 'none'; }} />
+       <Elem name="heidi" style={{ color: "#EABE00", fontSize: "48px", display: "inline-block", width: "48px", height: "48px" }}>
+        <IconFolderOpen style={{ width: "48px", height: "48px" }} />
+      </Elem>
+
       <Elem name="header" tag="h1">
         No projects found!
       </Elem>
@@ -83,7 +85,7 @@ export const EmptyProjectsList = ({ openModal, isOwner = true }) => {
             : "There are no projects available for you to view."}
         </p>
         {isOwner && (
-          <Button onClick={openModal} className="my-8" aria-label="Create new project">
+          <Button onClick={openModal} className="my-8" aria-label="Create new project" style={{ borderColor: "#EABE00", backgroundColor: "#EABE00" }}>
             Create Project
           </Button>
         )}
@@ -195,6 +197,8 @@ const ProjectCard = ({ project }) => {
           background: 'var(--color-bg-card)',
           boxShadow: 'var(--shadow-card)',
           transition: 'all 0.25s ease',
+          // borderColor: '#262626CC',
+          borderColor: "var(--color-border)",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'translateY(-3px)';

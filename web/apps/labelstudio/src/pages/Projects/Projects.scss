@@ -237,4 +237,13 @@
       }
     }
   }
+
+  :root[data-theme="light"] {
+    --color-border: #e6e6e6;
+  }
+  
+  :root[data-theme="dark"] {
+    --color-border: #333333;
+  }
+  
 }

@@ -138,10 +138,20 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
       {enabled && (
         <div className={menubarClass}>
           <Dropdown.Trigger dropdown={menuDropdownRef} closeOnClickOutside={!sidebarPinned}>
-            <div className={`${menubarClass.elem("trigger")} main-menu-trigger`}>
-              <LSLogo className={`${menubarClass.elem("logo")}`} alt="Label Studio Logo" />
+          <div className={`${menubarClass.elem("trigger")} main-menu-trigger flex items-center gap-2`}>
+            <img
+              src="https://www.lunor.quest/assets/LogoSmall.png"
+              alt="Lunor Studio Logo"
+              className={`${menubarClass.elem("logo")} w-8 h-8`}
+            />
+            <span className="logo-name">
+              Lunor Studio
+            </span>
+            <div className="ml-auto">
               <Hamburger opened={sidebarOpened} />
             </div>
+          </div>
+
           </Dropdown.Trigger>
 
           <div className={menubarContext}>
@@ -228,7 +238,7 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
 
                 <VersionNotifier showNewVersion />
 
-                <Menu.Item
+                {/* <Menu.Item
                   label="API"
                   href="https://api.labelstud.io/api-reference/introduction/getting-started"
                   icon={<IconTerminal />}
@@ -248,7 +258,7 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
                   icon={<IconSlack />}
                   target="_blank"
                   rel="noreferrer"
-                />
+                /> */}
 
                 <VersionNotifier showCurrentVersion />
 

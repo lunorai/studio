@@ -14,6 +14,7 @@ import "./Import.scss";
 import { Button, CodeBlock, SimpleCard, Spinner, Tooltip } from "@humansignal/ui";
 import samples from "./samples.json";
 import { importFiles } from "./utils";
+import { useCurrentUser } from "../../../providers/CurrentUser";
 
 const importClass = cn("upload_page");
 const dropzoneClass = cn("dropzone");
@@ -148,6 +149,12 @@ export const ImportPage = ({
   addColumns,
   openLabelingConfig,
 }) => {
+  const { user } = useCurrentUser();
+  const isOwner = Boolean(user?.isOwner) || (
+    Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
+  );
+  if (!isOwner) return null;
+
   const [error, setError] = useState();
   const api = useAPI();
   const projectConfigured = project?.label_config !== "<View></View>";
@@ -405,10 +412,10 @@ export const ImportPage = ({
                               href="https://labelstud.io/tags/video#Video-format"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center"
+                              className="inline-flex items-center text-[#EABE00]"
                               aria-label="Learn more about video format support (opens in a new tab)"
                             >
-                              <IconInfoOutline className="w-4 h-4 text-primary-content hover:text-primary-content-hover" />
+                              <IconInfoOutline className="w-4 h-4 text-[#EABE00] hover:text-[#eabe001a]" />
                             </a>
                           </Tooltip>
                         </div>

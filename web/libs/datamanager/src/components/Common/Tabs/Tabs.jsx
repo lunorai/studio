@@ -7,6 +7,7 @@ import { Dropdown } from "../Dropdown/DropdownComponent";
 import Input from "../Input/Input";
 import "./Tabs.scss";
 import { TabsMenu } from "./TabsMenu";
+import { useCurrentUserAtom } from "libs/core/src/lib/hooks/useCurrentUser";
 
 const TabsContext = createContext();
 export const tabsCN = cn("tabs-dm");
@@ -21,6 +22,10 @@ export const Tabs = ({
   allowedActions,
   addIcon,
 }) => {
+  const { user } = useCurrentUserAtom();
+  const isOwner = Boolean(user?.isOwner) || (
+    Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
+  );
   const [selectedTab, setSelectedTab] = useState(activeTab);
 
   const switchTab = useCallback((tab) => {
@@ -36,10 +41,16 @@ export const Tabs = ({
     return {
       switchTab,
       selectedTab,
-      allowedActions,
+      allowedActions: {
+        ...allowedActions,
+        // Hide edit/duplicate for non-owners while preserving add/delete flags
+        edit: Boolean(allowedActions?.edit) && isOwner,
+        duplicate: Boolean(allowedActions?.duplicate) && isOwner,
+        add: Boolean(allowedActions?.add) && isOwner,
+      },
       lastTab: children.length === 1,
     };
-  }, [switchTab, selectedTab, allowedActions, children.length]);
+  }, [switchTab, selectedTab, allowedActions, children.length, isOwner]);
 
   return (
     <TabsContext.Provider value={contextValue}>
@@ -59,7 +70,7 @@ export const Tabs = ({
               )}
             </Droppable>
           </DragDropContext>
-          {allowedActions.add !== false && (
+          {allowedActions.add !== false && isOwner && (
             <Button size="small" look="string" variant="neutral" onClick={onAdd} data-leave>
               <IconPlus className="!h-3 !w-3" />
             </Button>

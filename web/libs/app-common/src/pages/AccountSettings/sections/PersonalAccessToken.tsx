@@ -104,7 +104,7 @@ export function PersonalAccessTokenDescription() {
         <>
           {" "}
           See{" "}
-          <a href="https://labelstud.io/guide/api.html" target="_blank" rel="noreferrer" className="inline-flex gap-1">
+          <a href="https://labelstud.io/guide/api.html" target="_blank" rel="noreferrer" className="inline-flex gap-1 !text-[#EABE00] hover:!text-[#EABE00]">
             Docs{" "}
             <span>
               <IconLaunch className="h-6 w-6" />
