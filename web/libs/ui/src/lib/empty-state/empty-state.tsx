@@ -254,7 +254,7 @@ export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(
         {...rest}
       >
         {/* Icon */}
-        <div className={cn("empty-state__icon", styles.icon, "flex items-center justify-center rounded-full")}>
+        <div className={cn("empty-state__icon", styles.icon, "flex items-center justify-center rounded-full")} style={{background: "#EABE00",color: "white"}}>
           {iconWithSize}
         </div>
 

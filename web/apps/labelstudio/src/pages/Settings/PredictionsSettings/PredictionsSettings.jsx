@@ -59,7 +59,7 @@ export const PredictionsSettings = () => {
         )}
 
         {loaded && versions.length === 0 && (
-          <SimpleCard title="" className="bg-primary-background border-primary-border-subtler p-base">
+          <SimpleCard title="" className="bg-transparent border-[#EABE00] p-base">
             <EmptyState
               size="medium"
               variant="primary"
@@ -75,7 +75,7 @@ export const PredictionsSettings = () => {
                       rel="noopener noreferrer"
                       data-testid="predictions-help-link"
                       aria-label="Learn more about predictions (opens in new window)"
-                      className="inline-flex items-center gap-1 hover:underline"
+                      className="inline-flex items-center gap-1 hover:underline text-[#EABE00] hover:text-[#EABE00]"
                     >
                       Learn more
                       <IconExternal width={16} height={16} />
