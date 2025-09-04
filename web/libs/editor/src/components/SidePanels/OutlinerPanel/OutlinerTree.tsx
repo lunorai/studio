@@ -200,10 +200,10 @@ const OutlinerInnerTreeComponent: FC<OutlinerInnerTreeProps> = observer(({ regio
 
 const useDataTree = ({ regions, rootClass, footer }: any) => {
   const processor = useCallback((item: any, idx, _false, _null, _onClick) => {
-    const { id, type, hidden, isDrawing, locked } = item ?? {};
+    const { id, type, hidden, isDrawing, locked, incomplete } = item ?? {};
     const style = item?.background ?? item?.getOneColor?.();
     const color = chroma(style ?? "#666").alpha(1);
-    const mods: Record<string, any> = { hidden, type, isDrawing };
+    const mods: Record<string, any> = { hidden, type, isDrawing: isDrawing || incomplete };
 
     const label = <RegionLabel item={item} />;
 
@@ -416,7 +416,7 @@ const RootTitle: FC<any> = observer(
           <Elem name="title">
             {label}
             {item?.text && <Elem name="text">{item.text.replace(/\\n/g, "\n")}</Elem>}
-            {item?.isDrawing && (
+            {(item?.isDrawing || item?.incomplete) && (
               <Elem tag="span" name="incomplete">
                 <Tooltip title={`Incomplete ${item.type?.replace("region", "") ?? "region"}`}>
                   <IconWarning />
@@ -424,16 +424,17 @@ const RootTitle: FC<any> = observer(
               </Elem>
             )}
           </Elem>
-          <RegionControls
-            hovered={hovered}
-            item={item}
-            entity={props.entity}
-            regions={props.children}
-            type={props.type}
-            collapsed={collapsed}
-            hasControls={hasControls && isArea}
-            toggleCollapsed={toggleCollapsed}
-          />
+          {item?.hideable !== false && (
+            <RegionControls
+              item={item}
+              entity={props.entity}
+              regions={props.children}
+              type={props.type}
+              collapsed={collapsed}
+              hasControls={hasControls && isArea}
+              toggleCollapsed={toggleCollapsed}
+            />
+          )}
         </Elem>
 
         {!collapsed && hasControls && isArea && (

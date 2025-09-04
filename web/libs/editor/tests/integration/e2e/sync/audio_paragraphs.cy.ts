@@ -219,7 +219,7 @@ describe("Sync: Audio Paragraphs", () => {
     });
 
     // Set playback speed before playing
-    AudioView.setPlaybackSpeedInput(1.5);
+    AudioView.setPlaybackSpeedInput(1.5, false); // false = audio-only, don't check video
     AudioView.playButton.click();
     cy.wait(1000);
 
@@ -235,7 +235,7 @@ describe("Sync: Audio Paragraphs", () => {
     });
 
     // Change speed during playback
-    AudioView.setPlaybackSpeedInput(1);
+    AudioView.setPlaybackSpeedInput(1, false); // false = audio-only, don't check video
     cy.wait(1000);
 
     // Check sync after speed change

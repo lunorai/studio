@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import { Divider } from "../../../components/Divider/Divider";
-import { EmptyState } from "../../../components/EmptyState/EmptyState";
-import { IconPredictions, Typography } from "@humansignal/ui";
+import { EmptyState, SimpleCard } from "@humansignal/ui";
+import { IconPredictions, Typography, IconExternal } from "@humansignal/ui";
 import { useAPI } from "../../../providers/ApiProvider";
 import { ProjectContext } from "../../../providers/ProjectProvider";
 import { Spinner } from "../../../components/Spinner/Spinner";
@@ -59,20 +59,32 @@ export const PredictionsSettings = () => {
         )}
 
         {loaded && versions.length === 0 && (
-          <EmptyState
-            icon={<IconPredictions />}
-            title="No predictions yet uploaded"
-            description="Predictions could be used to prelabel the data, or validate the model. You can upload and select predictions from multiple model versions. You can also connect live models in the Model tab."
-            footer={
-              <div>
-                Need help?
-                <br />
-                <a href="https://labelstud.io/guide/predictions" target="_blank" rel="noreferrer">
-                  Learn more on how to upload predictions in our docs
-                </a>
-              </div>
-            }
-          />
+          <SimpleCard title="" className="bg-primary-background border-primary-border-subtler p-base">
+            <EmptyState
+              size="medium"
+              variant="primary"
+              icon={<IconPredictions />}
+              title="No predictions uploaded yet"
+              description="Upload predictions to automatically prelabel your data and speed up annotation. Import predictions from multiple model versions to compare their performance, or connect live models from the Model page to generate predictions on demand."
+              footer={
+                !window.APP_SETTINGS?.whitelabel_is_active && (
+                  <Typography variant="label" size="small" className="text-primary-link">
+                    <a
+                      href="https://labelstud.io/guide/predictions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid="predictions-help-link"
+                      aria-label="Learn more about predictions (opens in new window)"
+                      className="inline-flex items-center gap-1 hover:underline"
+                    >
+                      Learn more
+                      <IconExternal width={16} height={16} />
+                    </a>
+                  </Typography>
+                )
+              }
+            />
+          </SimpleCard>
         )}
 
         <PredictionsList project={project} versions={versions} fetchVersions={fetchVersions} />

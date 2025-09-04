@@ -925,9 +925,15 @@ def read_templates_and_groups():
     configs = []
     for config_file in pathlib.Path(annotation_templates_dir).glob('**/*.yml'):
         config = read_yaml(config_file)
-        if settings.VERSION_EDITION == 'Community':
-            if settings.VERSION_EDITION.lower() != config.get('type', 'community'):
+
+        if settings.VERSION_EDITION != 'Community':
+            if config.get('group', '').lower() == 'community contributions':
                 continue
+
+        if settings.VERSION_EDITION == 'Community':
+            if config.get('type', 'community').lower() != 'community':
+                continue
+
         if config.get('image', '').startswith('/static') and settings.HOSTNAME:
             # if hostname set manually, create full image urls
             config['image'] = settings.HOSTNAME + config['image']
@@ -935,6 +941,10 @@ def read_templates_and_groups():
     template_groups_file = find_file(os.path.join('annotation_templates', 'groups.txt'))
     with open(template_groups_file, encoding='utf-8') as f:
         groups = f.read().splitlines()
+
+    if settings.VERSION_EDITION != 'Community':
+        groups = [group for group in groups if group.lower() != 'community contributions']
+
     logger.debug(f'{len(configs)} templates found.')
     return {'templates': configs, 'groups': groups}
 

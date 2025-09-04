@@ -186,12 +186,12 @@ class OrganizationMemberListAPI(generics.ListAPIView):
 
             # return only active users (exclude DISABLED and NOT_ACTIVATED)
             if active:
-                return org.active_members.order_by('user__username')
+                return org.active_members.prefetch_related('user__om_through').order_by('user__username')
 
             # organization page to show all members
-            return org.members.order_by('user__username')
+            return org.members.prefetch_related('user__om_through').order_by('user__username')
         else:
-            return org.members.order_by('user__username')
+            return org.members.prefetch_related('user__om_through').order_by('user__username')
 
 
 @method_decorator(

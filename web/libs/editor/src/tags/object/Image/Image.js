@@ -11,6 +11,7 @@ import { BrushRegionModel } from "../../../regions/BrushRegion";
 import { EllipseRegionModel } from "../../../regions/EllipseRegion";
 import { KeyPointRegionModel } from "../../../regions/KeyPointRegion";
 import { PolygonRegionModel } from "../../../regions/PolygonRegion";
+import { VectorRegionModel } from "../../../regions/VectorRegion";
 import { RectRegionModel } from "../../../regions/RectRegion";
 import * as Tools from "../../../tools";
 import ToolsManager from "../../../tools/Manager";
@@ -142,6 +143,7 @@ const IMAGE_CONSTANTS = {
   rectanglelabels: "rectanglelabels",
   keypointlabels: "keypointlabels",
   polygonlabels: "polygonlabels",
+  vectorlabels: "vectorlabels",
   brushlabels: "brushlabels",
   bitmaskModel: "BitmaskModel",
   bitmasklabels: "bitmasklabels",
@@ -175,7 +177,14 @@ const Model = types
     mode: types.optional(types.enumeration(["drawing", "viewing", "brush", "eraser"]), "viewing"),
 
     regions: types.array(
-      types.union(BrushRegionModel, RectRegionModel, EllipseRegionModel, PolygonRegionModel, KeyPointRegionModel),
+      types.union(
+        BrushRegionModel,
+        RectRegionModel,
+        EllipseRegionModel,
+        PolygonRegionModel,
+        VectorRegionModel,
+        KeyPointRegionModel,
+      ),
       [],
     ),
 
@@ -596,6 +605,9 @@ const Model = types
 
     function createImageEntities() {
       if (!self.store.task) return;
+
+      // Clear existing entities to prevent duplicates from React StrictMode double mounting
+      self.imageEntities.clear();
 
       const parsedValue = self.multiImage ? self.parsedValueList : self.parsedValue;
       const idPostfix = self.annotation ? `@${self.annotation.id}` : "";
@@ -1135,10 +1147,10 @@ const Model = types
       self.annotation.history.freeze();
 
       self.regions.forEach((shape) => {
-        shape.updateImageSize(width / naturalWidth, height / naturalHeight, width, height, userResize);
+        shape.updateImageSize?.(width / naturalWidth, height / naturalHeight, width, height, userResize);
       });
       self.regs.forEach((shape) => {
-        shape.updateImageSize(width / naturalWidth, height / naturalHeight, width, height, userResize);
+        shape.updateImageSize?.(width / naturalWidth, height / naturalHeight, width, height, userResize);
       });
       self.drawingRegion?.updateImageSize(width / naturalWidth, height / naturalHeight, width, height, userResize);
 
@@ -1283,6 +1295,26 @@ const CoordsCalculations = types
 
     internalToCanvasY(n) {
       return (n / RELATIVE_STAGE_HEIGHT) * self.stageHeight;
+    },
+
+    internalToImageX(n) {
+      const { naturalWidth } = self.currentImageEntity;
+      return (n / RELATIVE_STAGE_WIDTH) * naturalWidth;
+    },
+
+    internalToImageY(n) {
+      const { naturalHeight } = self.currentImageEntity;
+      return (n / RELATIVE_STAGE_HEIGHT) * naturalHeight;
+    },
+
+    imageToInternalX(n) {
+      const { naturalWidth } = self.currentImageEntity;
+      return (n / naturalWidth) * RELATIVE_STAGE_WIDTH;
+    },
+
+    imageToInternalY(n) {
+      const { naturalHeight } = self.currentImageEntity;
+      return (n / naturalHeight) * RELATIVE_STAGE_HEIGHT;
     },
   }));
 

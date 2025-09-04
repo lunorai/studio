@@ -96,7 +96,7 @@ def allowlist_svg(dirty_xml):
         'line',
         'path',
         'polygon',
-        'polyline',
+        'vector',
         'rect',
     ]
 

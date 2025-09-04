@@ -17,7 +17,7 @@ import { TemplatesList } from "./TemplatesList";
 import tags from "@humansignal/core/lib/utils/schema/tags.json";
 import { UnsavedChanges } from "./UnsavedChanges";
 import { Checkbox, CodeEditor, Select } from "@humansignal/ui";
-import { toSnakeCase } from "strman";
+import snakeCase from "lodash/snakeCase";
 
 const wizardClass = cn("wizard");
 const configClass = cn("configure");
@@ -601,7 +601,7 @@ export const ConfigPage = ({
   const setSelectedGroup = React.useCallback(
     (group) => {
       _setSelectedGroup(group);
-      __lsa(`labeling_setup.list.${toSnakeCase(group)}`);
+      __lsa(`labeling_setup.list.${snakeCase(group)}`);
     },
     [_setSelectedGroup],
   );
@@ -659,7 +659,7 @@ export const ConfigPage = ({
       setTemplate(recipe.config);
       setSelectedRecipe(recipe);
       setMode("view");
-      __lsa(`labeling_setup.view.${toSnakeCase(recipe.group)}.${toSnakeCase(recipe.title)}`);
+      __lsa(`labeling_setup.view.${snakeCase(recipe.group)}.${snakeCase(recipe.title)}`);
     }
   });
 

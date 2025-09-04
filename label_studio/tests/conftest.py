@@ -344,7 +344,7 @@ def ml_backend_for_test_predict(ml_backend):
                     'model_version': 'ModelSingle',
                     'score': 0.1,
                     'result': [
-                        {'from_name': 'label', 'to_name': 'text', 'type': 'choices', 'value': {'choices': ['Single']}}
+                        {'from_name': 'label', 'to_name': 'text', 'type': 'choices', 'value': {'choices': ['label_A']}}
                     ],
                 },
             ]
@@ -445,7 +445,7 @@ def project_dialog():
       <TextEditor>
         <Text name="dialog" value="$dialog"></Text>
         <Header value="Your answer is:"></Header>
-        <TextArea name="answer"></TextArea>
+        <TextArea name="answer" toName="dialog"></TextArea>
       </TextEditor>
     </View>"""
 
@@ -694,6 +694,7 @@ def set_feature_flag_envvar():
     Automatically set the environment variable for all tests, including Tavern tests.
     """
     os.environ['fflag_optic_all_optic_1938_storage_proxy'] = 'true'
+    os.environ['fflag_feat_utc_210_prediction_validation_15082025'] = 'true'
 
 
 @pytest.fixture(name='fflag_feat_back_lsdv_3958_server_side_encryption_for_target_storage_short_on')

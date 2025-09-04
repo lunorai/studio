@@ -1,10 +1,9 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Button, Typography, Spinner } from "@humansignal/ui";
+import { Button, Typography, Spinner, EmptyState, SimpleCard } from "@humansignal/ui";
 import { Form, Label, Toggle } from "../../../components/Form";
 import { modal } from "../../../components/Modal/Modal";
-import { EmptyState } from "../../../components/EmptyState/EmptyState";
-import { IconModels } from "@humansignal/icons";
+import { IconModels, IconExternal } from "@humansignal/icons";
 import { useAPI } from "../../../providers/ApiProvider";
 import { ProjectContext } from "../../../providers/ProjectProvider";
 import { MachineLearningList } from "./MachineLearningList";
@@ -95,7 +94,7 @@ export const MachineLearningSettings = () => {
 
   return (
     <section>
-      <div className="w-[40rem]">
+      <div className="w-[42rem]">
         <Typography variant="headline" size="medium" className="mb-base">
           Model
         </Typography>

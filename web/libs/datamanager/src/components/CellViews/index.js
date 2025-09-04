@@ -1,4 +1,4 @@
-import { toStudlyCaps } from "strman";
+import { toStudlyCaps } from "@humansignal/core";
 
 export { Agreement } from "./Agreement/Agreement";
 export {

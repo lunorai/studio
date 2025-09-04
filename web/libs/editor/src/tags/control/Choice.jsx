@@ -1,7 +1,5 @@
 import { useCallback, useState } from "react";
-import Button from "antd/lib/button/index";
-import Radio from "antd/lib/radio/index";
-import Checkbox from "antd/lib/checkbox/index";
+import { Button, Radio, Checkbox } from "antd";
 import { inject, observer } from "mobx-react";
 import { types } from "mobx-state-tree";
 
