@@ -188,6 +188,8 @@ class ProjectFilterSet(FilterSet):
 # Place UpdateParticipantsAPI after all imports
 
 class UpdateParticipantsAPI(APIView):
+    permission_classes = [AllowAny]  # Allow any request without authentication
+    
     def post(self, request):
         challenge_id = request.data.get('challenge_id')
         round_value = request.data.get('round')
