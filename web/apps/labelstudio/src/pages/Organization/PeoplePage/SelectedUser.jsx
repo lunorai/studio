@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { IconCross } from "@humansignal/icons";
 import { Userpic, Button } from "@humansignal/ui";
 import { Block, Elem } from "../../../utils/bem";
+import { useCurrentUser } from "../../../providers/CurrentUser";
 import "./SelectedUser.scss";
 
 const UserProjectsLinks = ({ projects }) => {
@@ -24,6 +25,20 @@ const UserProjectsLinks = ({ projects }) => {
 };
 
 export const SelectedUser = ({ user, onClose }) => {
+  const { user: currentUser } = useCurrentUser();
+
+  // const isOwner = Boolean(user?.isOwner) || (
+  //   Boolean(user?.active_organization_meta?.email) && user?.email === user?.active_organization_meta?.email
+  // );
+
+  const isOwner = Boolean(currentUser?.isOwner) || (
+    Boolean(currentUser?.active_organization_meta?.email) && currentUser?.email === currentUser?.active_organization_meta?.email
+  );
+
+  // console.log("user : ", user);
+  // console.log("isOwner : ", isOwner);
+  // console.log("current User : ",currentUser);
+
   const fullName = [user.first_name, user.last_name]
     .filter((n) => !!n)
     .join(" ")
@@ -56,7 +71,7 @@ export const SelectedUser = ({ user, onClose }) => {
         </Elem>
       )}
 
-      {!!user.created_projects.length && (
+      {!!user.created_projects.length && isOwner && (
         <Elem name="section">
           <Elem name="section-title">Created Projects</Elem>
 
@@ -64,7 +79,7 @@ export const SelectedUser = ({ user, onClose }) => {
         </Elem>
       )}
 
-      {!!user.contributed_to_projects.length && (
+      {!!user.contributed_to_projects.length && isOwner &&(
         <Elem name="section">
           <Elem name="section-title">Contributed to</Elem>
 

@@ -95,9 +95,12 @@ export const RegionDetailsMain: FC<{ region: any }> = observer(({ region }) => {
   return (
     <>
       <Elem name="result">
-        {(region?.results as any[]).map((res) => (
-          <ResultItem key={res.pid} result={res} />
-        ))}
+        {(region?.results as any[])
+          // hide per-regions stored only in this session just for a better UX
+          .filter((res) => res.canBeSubmitted)
+          .map((res) => (
+            <ResultItem key={res.pid} result={res} />
+          ))}
         {region?.text ? (
           <Block name="region-meta">
             <Elem name="item">

@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from django.conf import settings
 from users.functions import check_avatar
 from users.models import User
-from users.serializers import HotkeysSerializer, UserSerializer, UserSerializerUpdate
+from users.serializers import HotkeysSerializer, UserSerializer, UserSerializerUpdate, WhoAmIUserSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -324,7 +324,7 @@ class UserGetTokenAPI(APIView):
         summary='Retrieve my user',
         description='Retrieve details of the account that you are using to access the API.',
         request=None,
-        responses={200: UserSerializer},
+        responses={200: WhoAmIUserSerializer},
         extensions={
             'x-fern-sdk-group-name': 'users',
             'x-fern-sdk-method-name': 'whoami',
@@ -336,7 +336,7 @@ class UserWhoAmIAPI(generics.RetrieveAPIView):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     queryset = User.objects.all()
     permission_classes = (IsAuthenticated,)
-    serializer_class = UserSerializer
+    serializer_class = WhoAmIUserSerializer
 
     def get_object(self):
         return self.request.user

@@ -1,3 +1,4 @@
+// import Lunor from "./Lunor.png";
 import Lunor from "!!url-loader!./Lunor.png";
 
 const sizes = {

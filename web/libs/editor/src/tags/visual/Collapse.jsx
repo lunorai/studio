@@ -55,6 +55,8 @@ const PanelModel = types
       "bitmasklabels",
       "ellipselabels",
       "polygonlabels",
+      "vector",
+      "vectorlabels",
       "keypointlabels",
       "brushlabels",
       "hypertextlabels",
@@ -75,6 +77,7 @@ const PanelModel = types
       "timeserieslabels",
       "paragraphs",
       "paragraphlabels",
+      ...Registry.customTags.map((t) => t.tag.toLowerCase()),
     ]),
   })
   .views((self) => ({

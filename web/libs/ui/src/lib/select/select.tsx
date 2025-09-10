@@ -186,7 +186,17 @@ export const Select = forwardRef(
     );
 
     const selectedOptions = useMemo(() => {
-      return flatOptions.filter((option) => isSelected(option));
+      const allSelected = flatOptions.filter((option) => isSelected(option));
+
+      const uniqueSelected = new Map();
+      allSelected.forEach((option) => {
+        const optionValue = option?.value ?? option;
+        if (!uniqueSelected.has(optionValue)) {
+          uniqueSelected.set(optionValue, option);
+        }
+      });
+
+      return Array.from(uniqueSelected.values());
     }, [flatOptions, isSelected, value, multiple]);
 
     const onSearchInputHandler = useCallback(
@@ -377,7 +387,7 @@ export const Select = forwardRef(
                             itemData={renderedOptions}
                             itemSize={() => VARIABLE_LIST_ITEM_HEIGHT}
                             itemCount={renderedOptions.length}
-                            height={VARIABLE_LIST_COUNT_RENDERED * VARIABLE_LIST_ITEM_HEIGHT} // this makes the height based on available items
+                            height={5 * VARIABLE_LIST_ITEM_HEIGHT} // only render 5 items
                             // width={VARIABLE_LIST_WIDTH}
                             onItemsRendered={onItemsRendered}
                             ref={infiniteLoaderRef}
@@ -511,7 +521,7 @@ const Option = ({
         data-disabled={disabled}
       >
         {multiple && <Checkbox tabIndex={-1} checked={isOptionSelected} indeterminate={isIndeterminate} readOnly />}
-        <div data-testid="select-option-label" className="w-full">
+        <div data-testid="select-option-label" className="w-full min-w-0 truncate">
           {label}
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useHotkeys } from "react-hotkeys-hook";
-import { toStudlyCaps } from "strman";
+import { toStudlyCaps } from "@humansignal/core";
 import { keymap } from "./keymap";
 
 export type Hotkey = {

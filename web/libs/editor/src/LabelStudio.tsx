@@ -2,7 +2,7 @@ import { configure } from "mobx";
 import { destroy } from "mobx-state-tree";
 import { render, unmountComponentAtNode } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { toCamelCase } from "strman";
+import camelCase from "lodash/camelCase";
 import { LabelStudio as LabelStudioReact } from "./Component";
 import App from "./components/App/App";
 import { configureStore } from "./configureStore";
@@ -257,7 +257,7 @@ export class LabelStudio {
       const callback = this.options[key];
 
       if (isDefined(callback)) {
-        const eventName = toCamelCase(key.replace(/^on/, ""));
+        const eventName = camelCase(key.replace(/^on/, ""));
 
         this.events.on(eventName, callback);
       }

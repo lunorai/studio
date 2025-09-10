@@ -22,9 +22,7 @@ export const Spinner = injector(({ SDK, visible = true, ...props }) => {
     }
   }, [props.size]);
 
-  const source = React.useMemo(() => {
-    return Running.full;
-  }, [props.size]);
+  const source = Running.default;
 
   const videoStyles = {
     width: "100%",
@@ -55,8 +53,8 @@ export const Spinner = injector(({ SDK, visible = true, ...props }) => {
             <ExternalSpinner size={size} />
           ) : (
             <img
-              src={source.x1}
-              srcSet={[`${source.x1} 1x`, `${source.x2} 2x`].join(",")}
+              src={"https://app.lunor.quest/Lunor.png"}
+              // srcSet={[`${source.x1} 1x`, `${source.x2} 2x`].join(",")}
               style={{ ...videoStyles, animation: "ls-lunor-spin 2s ease-in-out infinite" }}
               alt="opossum loader"
             />

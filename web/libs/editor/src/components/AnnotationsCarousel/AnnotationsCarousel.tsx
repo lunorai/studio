@@ -65,8 +65,8 @@ export const AnnotationsCarousel = observer(({ store, annotationStore }: Annotat
     const isOwner = Boolean(currentUser?.isOwner) || (
       Boolean(currentUser?.activeOrganizationMeta?.email) && currentUser?.email === currentUser?.activeOrganizationMeta?.email
     );
-    console.log("is owner: ", isOwner);
-    console.log("Current User: ", currentUser);
+    // console.log("is owner: ", isOwner);
+    // console.log("Current User: ", currentUser);
     if (!isOwner && currentUser) {
       newEntities = newEntities.filter((entity) => {
         // Only keep annotations created by the current user; exclude predictions for non-owners

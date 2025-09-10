@@ -2,9 +2,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "r
 import { observer } from "mobx-react";
 import { isAlive } from "mobx-state-tree";
 
-import Button from "antd/lib/button/index";
-import Form from "antd/lib/form/index";
-import Input from "antd/lib/input/index";
+import { Button, Form, Input } from "antd";
 
 import { IconTrash } from "@humansignal/icons";
 import styles from "../../../components/HtxTextBox/HtxTextBox.module.scss";

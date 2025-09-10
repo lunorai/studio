@@ -51,7 +51,7 @@ module.exports = {
           ],
         ],
         plugins: [
-          ["babel-plugin-import", { libraryName: "antd" }],
+          ["babel-plugin-import", { libraryName: "antd", style: false }],
           "@babel/plugin-proposal-class-properties",
           "@babel/plugin-proposal-private-methods",
           "@babel/plugin-proposal-optional-chaining",
