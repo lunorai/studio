@@ -59,8 +59,8 @@ interface EmptyStateLayoutProps {
 // Internal helper function to render common empty state structure
 const renderEmptyStateLayout = ({
   icon,
-  iconBackground = "bg-primary-emphasis",
-  iconColor = "text-primary-icon",
+  iconBackground = "bg-[#EABE00]",
+  iconColor = "text-[#fff]",
   title,
   description,
   actions,
@@ -171,7 +171,7 @@ const DocumentationLink = () => {
         href={getDocsUrl("guide/tasks")}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1"
+        className="inline-flex items-center gap-1 text-[#EABE00] hover:text-[#EABE00]"
         data-testid="dm-docs-data-import-link"
       >
         See docs on importing data
@@ -286,7 +286,7 @@ export const EmptyState: FC<EmptyStateProps> = ({
 
   // Default case: show import functionality (existing behavior for Owners/Admins/Managers)
   return renderEmptyStateLayout({
-    icon: <IconUpload />,
+    icon: <IconUpload style={{ display: "none" }} />,
     title: "Import data to get your project started",
     description: "Connect your cloud storage or upload files from your computer",
     testId: "empty-state-label",
@@ -295,7 +295,7 @@ export const EmptyState: FC<EmptyStateProps> = ({
     additionalContent: <StorageProviderIcons />,
     actions: (
       <>
-        <Button
+        {/* <Button
           variant="primary"
           look="filled"
           className="flex-1"
@@ -315,7 +315,7 @@ export const EmptyState: FC<EmptyStateProps> = ({
           >
             Import
           </Button>
-        )}
+        )} */}
       </>
     ),
     footer: <DocumentationLink />,

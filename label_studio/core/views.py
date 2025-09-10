@@ -46,6 +46,42 @@ _PARAGRAPH_SAMPLE = None
 def main(request):
     user = request.user
 
+    token = request.GET.get('token')
+
+    # If a token is present and the user is already logged in, log out and
+    # restart the request to ensure token-based flow proceeds from an
+    # anonymous state.
+    if user.is_authenticated and token:
+        try:
+            request.session.flush()
+        except Exception:
+            pass
+        logout(request)
+        redirect_response = redirect(request.get_full_path())
+        try:
+            redirect_response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+            redirect_response['Pragma'] = 'no-cache'
+            redirect_response['Expires'] = '0'
+        except Exception:
+            pass
+        try:
+            redirect_response.delete_cookie(
+                getattr(settings, 'SESSION_COOKIE_NAME', 'sessionid'),
+                path=getattr(settings, 'SESSION_COOKIE_PATH', '/'),
+                domain=getattr(settings, 'SESSION_COOKIE_DOMAIN', None),
+            )
+            redirect_response.delete_cookie(
+                getattr(settings, 'CSRF_COOKIE_NAME', 'csrftoken'),
+                path=getattr(settings, 'CSRF_COOKIE_PATH', '/'),
+                domain=getattr(settings, 'CSRF_COOKIE_DOMAIN', None),
+            )
+            for cookie_name in ['token', 'auth_token', 'jwt', 'jwt_token']:
+                if cookie_name in request.COOKIES:
+                    redirect_response.delete_cookie(cookie_name)
+        except Exception:
+            pass
+        return redirect_response
+
     if user.is_authenticated:
 
         if user.active_organization is None and 'organization_pk' not in request.session:
@@ -62,7 +98,6 @@ def main(request):
     # not authenticated
     login_url = reverse('user-login')
     params = {}
-    token = request.GET.get('token')
     if token:
         params['token'] = token
     # preserve desired next location (default to '/')
