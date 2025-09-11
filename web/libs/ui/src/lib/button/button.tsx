@@ -87,7 +87,7 @@ export function buttonVariant(
     { [styles.waiting]: waiting },
     // 👉 Only apply for primary
     variant === "primary" &&
-      "!bg-[#EABE00] hover:!bg-transparent !border-[#EABE00] hover:!border-[#EABE00] hover:!text-[#EABE00] disabled:!text-[color:--text-color] !text-white disabled:!bg-transparent focus:outline-none focus:box-shadow-none focus:ring-0",
+      "!bg-[#EABE00] hover:!bg-transparent !border-[#EABE00] hover:!border-[#EABE00] hover:!text-[#EABE00] disabled:!text-[color:--text-color] !text-black disabled:!bg-transparent focus:outline-none focus:box-shadow-none focus:ring-0",
     className,
   );
 }

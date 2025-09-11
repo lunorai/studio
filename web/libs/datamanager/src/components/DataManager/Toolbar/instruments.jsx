@@ -7,6 +7,9 @@ import { FiltersPane } from "../../Common/FiltersPane";
 import { Icon } from "../../Common/Icon/Icon";
 import { Interface } from "../../Common/Interface";
 import { ExportButton, ImportButton } from "../../Common/SDKButtons";
+import { Button } from "@humansignal/ui";
+import { inject, observer } from "mobx-react";
+import { useState } from "react";
 import { Tooltip } from "@humansignal/ui";
 import { ActionsButton } from "./ActionsButton";
 import { GridWidthButton } from "./GridWidthButton";
@@ -124,5 +127,67 @@ export const instruments = {
         <ExportButton size={size}>Export</ExportButton>
       </Interface>
     );
+  },
+  "export-my-annotations": ({ size }) => {
+    const ExportMyAnnotationsButton = inject(({ store }) => ({ projectId: store?.project?.id }))(
+      observer(({ projectId }) => {
+        const [loading, setLoading] = useState(false);
+        const currentUser = window.APP_SETTINGS?.user;
+        const isOwner = Boolean(currentUser?.isOwner) || (
+          Boolean(currentUser?.activeOrganizationMeta?.email) && currentUser?.email === currentUser?.activeOrganizationMeta?.email
+        );
+
+        if (isOwner) return null;
+
+        const onClick = async () => {
+          try {
+            setLoading(true);
+            const params = new URLSearchParams({ exportType: "CSV", annotations_by_me: "1" });
+            const response = await fetch(`/api/projects/${projectId}/export?${params.toString()}`, {
+              credentials: "include",
+            });
+            if (!response.ok) throw new Error(`${response.status}`);
+            const blob = await response.blob();
+            const fallback = `annotations-${window.APP_SETTINGS?.user?.id || "me"}.csv`;
+            const filename = response.headers.get("filename") || fallback;
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error("Failed to export annotations by me:", err);
+          } finally {
+            setLoading(false);
+          }
+        };
+        const styleOverride = loading
+          ? {
+              "--wait-color-value": "#EABE00",
+              "--wait-color-value-outline": "#EABE00",
+              "--text-color": "#ccc",
+            }
+          : {
+              "--wait-color-value": "#EABE00",
+              "--wait-color-value-outline": "#EABE00",
+            };
+
+        return (
+          <Button
+            size={size}
+            look="outlined"
+            variant="primary"
+            onClick={onClick}
+            waiting={loading}
+            disabled={loading}
+            aria-label="End Annotation"
+            style={styleOverride}
+          >
+            Final Submit
+          </Button>
+        );
+      }),
+    );
+    return <Interface name="export"><ExportMyAnnotationsButton /></Interface>;
   },
 };

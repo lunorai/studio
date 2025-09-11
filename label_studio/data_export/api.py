@@ -179,6 +179,8 @@ class ExportAPI(generics.RetrieveAPIView):
         only_finished = not query_serializer.validated_data['download_all_tasks']
         download_resources = query_serializer.validated_data['download_resources']
         interpolate_key_frames = query_serializer.validated_data['interpolate_key_frames']
+        # custom filter to include only current user's annotations in the export payload
+        annotations_by_me = request.GET.get('annotations_by_me') in ['1', 'true', 'True']
 
         tasks_ids = request.GET.getlist('ids[]')
 
@@ -202,6 +204,14 @@ class ExportAPI(generics.RetrieveAPIView):
                 context={'interpolate_key_frames': interpolate_key_frames},
             ).data
         logger.debug('Prepare export files')
+
+        # Optionally filter annotations to only those completed by current user
+        if annotations_by_me:
+            current_user_id = getattr(request.user, 'id', None)
+            if current_user_id is not None:
+                for task in tasks:
+                    anns = task.get('annotations') or []
+                    task['annotations'] = [a for a in anns if a.get('completed_by') == current_user_id]
 
         export_file, content_type, filename = DataExport.generate_export_file(
             project, tasks, export_type, download_resources, request.GET, hostname=request.build_absolute_uri('/')
