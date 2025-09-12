@@ -350,6 +350,7 @@ class AnnotationsDMFieldSerializer(AnnotationSerializer):
             'last_activity': (u.last_activity.isoformat() if getattr(u, 'last_activity', None) else ''),
             'avatar': (u.avatar.url if getattr(u, 'avatar', None) else None),
             'initials': u.get_initials(False),
+            'lunor_userId': u.lunor_userId or '',
         }
 
     def get_completed_by(self, obj):
@@ -593,6 +594,7 @@ class DataManagerTaskSerializer(TaskSerializer):
                 'last_activity': (u.last_activity.isoformat() if getattr(u, 'last_activity', None) else ''),
                 'avatar': (u.avatar.url if getattr(u, 'avatar', None) else None),
                 'initials': u.get_initials(False),
+                'lunor_userId': u.lunor_userId or '',
             }
 
         # Return full objects when available; fall back to ids to maintain compatibility

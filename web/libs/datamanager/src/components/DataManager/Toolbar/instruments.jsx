@@ -129,13 +129,15 @@ export const instruments = {
     );
   },
   "export-my-annotations": ({ size }) => {
-    const ExportMyAnnotationsButton = inject(({ store }) => ({ projectId: store?.project?.id }))(
-      observer(({ projectId }) => {
+    const ExportMyAnnotationsButton = inject(({ store }) => ({ projectId: store?.project?.id, store }))(
+      observer(({ projectId, store }) => {
         const [loading, setLoading] = useState(false);
         const currentUser = window.APP_SETTINGS?.user;
         const isOwner = Boolean(currentUser?.isOwner) || (
           Boolean(currentUser?.activeOrganizationMeta?.email) && currentUser?.email === currentUser?.activeOrganizationMeta?.email
         );
+
+        console.log("Store : ",store);
 
         if (isOwner) return null;
 
@@ -148,15 +150,78 @@ export const instruments = {
             });
             if (!response.ok) throw new Error(`${response.status}`);
             const blob = await response.blob();
-            const fallback = `annotations-${window.APP_SETTINGS?.user?.id || "me"}.csv`;
-            const filename = response.headers.get("filename") || fallback;
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
-            link.click();
+
+            // Prepare upload params
+            const app = window.APP_SETTINGS ?? {};
+            
+        console.log("App : ",app);
+            const fallback = `annotations-${app?.user?.id || "me"}.csv`;
+            const filename = (response.headers.get("filename") || fallback).replace(/\.json$/i, ".csv");
+            const challengeId = Number(store?.project?.challenge_id ?? null);
+            const round = store?.project?.round ?? 1;
+            const userId = app?.user?.lunor_userId ?? '';
+
+            const graphqlEndpoint = "http://localhost:5000/graphql";
+
+            // GraphQL query to request an upload URL to R2
+            const gqlQuery = `query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {\n  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {\n    challengeId\n    round\n    submissionId\n    maxConcurrentUploadLimit\n    urlArr { url key }\n  }\n}`;
+
+            const gqlResp = await fetch(graphqlEndpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                query: gqlQuery,
+                variables: { challengeId, userId, round, filename },
+              }),
+              credentials: "include",
+            });
+            if (!gqlResp.ok) throw new Error(`GraphQL ${gqlResp.status}`);
+            const gqlJson = await gqlResp.json();
+            const uploadInfo = gqlJson?.data?.getAnnotationUploadUrl;
+            const uploadUrl = uploadInfo?.urlArr?.[0]?.url;
+            if (!uploadUrl) throw new Error("No upload URL returned");
+
+            // Upload CSV blob to R2 using the signed URL
+            const putResp = await fetch(uploadUrl, {
+              method: "PUT",
+              body: blob,
+              headers: {
+                "Content-Type": "text/csv",
+              },
+            });
+            if (!putResp.ok) throw new Error(`Upload ${putResp.status}`);
+
+            // After successful upload, notify backend with UpdateSubmissionAssetList
+            const assetKeys = Array.isArray(uploadInfo?.urlArr)
+              ? uploadInfo.urlArr.map((item) => item?.key).filter(Boolean)
+              : [filename];
+            const updateMutation = `mutation UpdateSubmissionAssetList($submissionId: Int, $challengeId: Int, $round: Int, $userId: String!, $asset_list: [String!]!) {\n  updateSubmissionAssetList(\n    submissionId: $submissionId\n    challengeId: $challengeId\n    round: $round\n    userId: $userId\n    asset_list: $asset_list\n  )\n}`;
+
+            const updateResp = await fetch(graphqlEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                query: updateMutation,
+                variables: {
+                  submissionId: uploadInfo?.submissionId ?? null,
+                  challengeId,
+                  round,
+                  userId,
+                  asset_list: assetKeys,
+                },
+              }),
+            });
+            if (!updateResp.ok) throw new Error(`UpdateSubmissionAssetList ${updateResp.status}`);
+
+            // Notify success
+            store?.SDK?.invoke?.("toast", { message: "Submission uploaded successfully", type: "success" });
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error("Failed to export annotations by me:", err);
+            store?.SDK?.invoke?.("toast", { message: `Upload failed: ${String(err)}`.slice(0, 300), type: "error" });
           } finally {
             setLoading(false);
           }

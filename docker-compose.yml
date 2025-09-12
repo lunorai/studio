@@ -32,13 +32,14 @@ services:
     depends_on:
       - db
     environment:
-      - DJANGO_DB=default
+      - DJANGO_DB=${DJANGO_DB}
       - POSTGRE_NAME=postgres
       - POSTGRE_USER=postgres
-      - POSTGRE_PASSWORD=
+      - POSTGRE_PASSWORD=${POSTGRE_PASSWORD}
       - POSTGRE_PORT=5432
-      - POSTGRE_HOST=db
+      - POSTGRE_HOST=${POSTGRE_HOST}
       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
+      - LUNOR_JWT_SECRET=${LUNOR_JWT_SECRET}
       - JSON_LOG=1
     #      - LOG_LEVEL=DEBUG
     volumes:
