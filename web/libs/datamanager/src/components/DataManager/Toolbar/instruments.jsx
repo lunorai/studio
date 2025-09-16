@@ -194,9 +194,11 @@ export const instruments = {
             if (!putResp.ok) throw new Error(`Upload ${putResp.status}`);
 
             // After successful upload, notify backend with UpdateSubmissionAssetList
+            // Use the key(s) returned by getAnnotationUploadUrl, do not use filename
             const assetKeys = Array.isArray(uploadInfo?.urlArr)
               ? uploadInfo.urlArr.map((item) => item?.key).filter(Boolean)
-              : [filename];
+              : [];
+            if (assetKeys.length === 0) throw new Error("No asset keys returned from getAnnotationUploadUrl");
             const updateMutation = `mutation UpdateSubmissionAssetList($submissionId: Int, $challengeId: Int, $round: Int, $userId: String!, $asset_list: [String!]!) {\n  updateSubmissionAssetList(\n    submissionId: $submissionId\n    challengeId: $challengeId\n    round: $round\n    userId: $userId\n    asset_list: $asset_list\n  )\n}`;
 
             const updateResp = await fetch(graphqlEndpoint, {
