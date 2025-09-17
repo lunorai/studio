@@ -29,6 +29,7 @@ const LOCAL_ENV = {
   NODE_ENV: mode,
   CSS_PREFIX: css_prefix,
   RELEASE_NAME: RELEASE,
+  GRAPHQL_ENDPOINT: process.env.GRAPHQL_ENDPOINT || "https://dev.100protocol.com/",
 };
 
 const BUILD = {

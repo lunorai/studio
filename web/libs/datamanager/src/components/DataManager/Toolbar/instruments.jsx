@@ -137,8 +137,6 @@ export const instruments = {
           Boolean(currentUser?.activeOrganizationMeta?.email) && currentUser?.email === currentUser?.activeOrganizationMeta?.email
         );
 
-        console.log("Store : ",store);
-
         if (isOwner) return null;
 
         const onClick = async () => {
@@ -154,14 +152,13 @@ export const instruments = {
             // Prepare upload params
             const app = window.APP_SETTINGS ?? {};
             
-        console.log("App : ",app);
             const fallback = `annotations-${app?.user?.id || "me"}.csv`;
             const filename = (response.headers.get("filename") || fallback).replace(/\.json$/i, ".csv");
             const challengeId = Number(store?.project?.challenge_id ?? null);
             const round = store?.project?.round ?? 1;
             const userId = app?.user?.lunor_userId ?? '';
 
-            const graphqlEndpoint = "http://localhost:5000/graphql";
+            const graphqlEndpoint = process.env.GRAPHQL_ENDPOINT || "https://dev.100protocol.com/";
 
             // GraphQL query to request an upload URL to R2
             const gqlQuery = `query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {\n  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {\n    challengeId\n    round\n    submissionId\n    maxConcurrentUploadLimit\n    urlArr { url key }\n  }\n}`;
