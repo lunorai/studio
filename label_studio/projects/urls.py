@@ -1,6 +1,6 @@
 from django.urls import include, path
 from . import api, views
-from .api import UpdateParticipantsAPI, UpdateChallengeStatusAPI
+from .api import UpdateParticipantsAPI, UpdateChallengeStatusAPI, FinalSubmissionCheckAPI, FinalSubmissionCreateAPI
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
 from django.urls import include, path
@@ -48,6 +48,9 @@ _api_urlpatterns = [
     path('<int:pk>/sample-task/', api.ProjectSampleTask.as_view(), name='project-sample-task'),
     # List available model versions
     path('<int:pk>/model-versions/', api.ProjectModelVersions.as_view(), name='project-model-versions'),
+    # Final submission tracking
+    path('<int:pk>/final-submission/check/', FinalSubmissionCheckAPI.as_view(), name='final-submission-check'),
+    path('<int:pk>/final-submission/', FinalSubmissionCreateAPI.as_view(), name='final-submission-create'),
 ]
 
 _api_urlpatterns_templates = [

@@ -38,7 +38,7 @@ from ml.serializers import MLBackendSerializer
 from projects.functions.next_task import get_next_task
 from projects.functions.stream_history import get_label_stream_history
 from projects.functions.utils import recalculate_created_annotations_and_labels_from_scratch
-from projects.models import Project, ProjectImport, ProjectManager, ProjectReimport, ProjectSummary
+from projects.models import Project, ProjectImport, ProjectManager, ProjectReimport, ProjectSummary, FinalSubmission
 from projects.serializers import (
     GetFieldsSerializer,
     ProjectCountsSerializer,
@@ -581,6 +581,66 @@ class ProjectAPI(generics.RetrieveUpdateDestroyAPIView):
     def put(self, request, *args, **kwargs):
         return super(ProjectAPI, self).put(request, *args, **kwargs)
 
+
+class FinalSubmissionCheckAPI(generics.GenericAPIView):
+    permission_required = ViewClassPermission(
+        GET=all_permissions.projects_view,
+    )
+
+    @extend_schema(
+        tags=['Projects'],
+        summary='Check if final submission exists',
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Exists flag and record id if present',
+            )
+        },
+    )
+    def get(self, request, pk):
+        project = generics.get_object_or_404(Project, pk=pk)
+        user = request.user
+        challenge_id = project.challenge_id or None
+        round_value = project.round or None
+        record = FinalSubmission.objects.filter(
+            project=project, user=user, challenge_id=challenge_id, round=round_value
+        ).first()
+        return Response({
+            'exists': bool(record),
+            'id': record.id if record else None,
+        })
+
+
+class FinalSubmissionCreateAPI(generics.GenericAPIView):
+    permission_required = ViewClassPermission(
+        POST=all_permissions.projects_change,
+    )
+
+    @extend_schema(
+        tags=['Projects'],
+        summary='Create a final submission record',
+        request=OpenApiTypes.OBJECT,
+        responses={201: OpenApiResponse(description='Created'), 200: OpenApiResponse(description='Already exists')},
+    )
+    def post(self, request, pk):
+        project = generics.get_object_or_404(Project, pk=pk)
+        user = request.user
+        lunor_user_id = getattr(user, 'lunor_userId', None)
+        challenge_id = project.challenge_id if project.challenge_id not in ['', None] else None
+        round_value = project.round if project.round not in ['', None] else None
+
+        obj, created = FinalSubmission.objects.get_or_create(
+            project=project,
+            user=user,
+            challenge_id=challenge_id,
+            round=round_value,
+            defaults={
+                'submitted_user_id': user.id,
+                'lunor_user_id': lunor_user_id or '',
+            },
+        )
+        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response({'id': obj.id, 'created': created}, status=status_code)
 
 # @method_decorator(
 #     name='get',

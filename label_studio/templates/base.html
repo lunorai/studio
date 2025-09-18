@@ -191,6 +191,7 @@
     feature_flags_default_value: {{ settings.FEATURE_FLAGS_DEFAULT_VALUE|json_dumps_ensure_ascii|safe }},
     server_id: {{ request.server_id|json_dumps_ensure_ascii|safe }},
     collect_analytics: {{ settings.COLLECT_ANALYTICS|yesno:"true,false" }},
+    graphql_endpoint: {{ settings.GRAPHQL_ENDPOINT|json_dumps_ensure_ascii|safe }},
 
     data_manager: {
       max_users_to_display: {{ settings.DM_MAX_USERS_TO_DISPLAY }},

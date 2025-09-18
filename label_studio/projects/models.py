@@ -1600,3 +1600,27 @@ class ProjectReimport(models.Model):
 
     def has_permission(self, user):
         return self.project.has_permission(user)
+
+
+class FinalSubmission(models.Model):
+    """Tracks final submissions to control button availability per user/project/challenge/round."""
+
+    id = models.AutoField(primary_key=True)
+    project = models.ForeignKey('projects.Project', on_delete=models.CASCADE, related_name='final_submissions')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='final_submissions')
+    submitted_user_id = models.IntegerField(help_text='Django user id at time of submission')
+    lunor_user_id = models.CharField(max_length=255, blank=True, null=True, default='')
+    challenge_id = models.IntegerField(blank=True, null=True, default=None)
+    round = models.IntegerField(blank=True, null=True, default=None)
+    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
+
+    class Meta:
+        db_table = 'final_submission'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['project', 'user', 'challenge_id', 'round'], name='unique_final_submission_per_user_project_round'
+            )
+        ]
+
+    def has_permission(self, user):
+        return self.project.has_permission(user)

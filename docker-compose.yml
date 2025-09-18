@@ -42,6 +42,7 @@ services:
       - LUNOR_JWT_SECRET=${LUNOR_JWT_SECRET}
       - JSON_LOG=1
       - LUNOR_JWT_SECRET=${LUNOR_JWT_SECRET}
+      - GRAPHQL_ENDPOINT=${GRAPHQL_ENDPOINT}
     #      - LOG_LEVEL=DEBUG
     volumes:
       - ./mydata:/label-studio/data:rw

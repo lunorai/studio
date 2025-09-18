@@ -132,12 +132,23 @@ export const instruments = {
     const ExportMyAnnotationsButton = inject(({ store }) => ({ projectId: store?.project?.id, store }))(
       observer(({ projectId, store }) => {
         const [loading, setLoading] = useState(false);
+        const [finalDisabled, setFinalDisabled] = useState(true);
         const currentUser = window.APP_SETTINGS?.user;
         const isOwner = Boolean(currentUser?.isOwner) || (
           Boolean(currentUser?.activeOrganizationMeta?.email) && currentUser?.email === currentUser?.activeOrganizationMeta?.email
         );
 
         if (isOwner) return null;
+
+        // Check if final submission already exists to disable button
+        useState(() => {
+          const projectIdNum = Number(projectId ?? null);
+          if (!projectIdNum) return;
+          fetch(`/api/projects/${projectIdNum}/final-submission/check/`, { credentials: "include" })
+            .then((resp) => resp.ok ? resp.json() : Promise.reject(new Error(String(resp.status))))
+            .then((json) => setFinalDisabled(Boolean(json?.exists)))
+            .catch(() => {});
+        });
 
         const onClick = async () => {
           try {
@@ -158,8 +169,8 @@ export const instruments = {
             const round = store?.project?.round ?? 1;
             const userId = app?.user?.lunor_userId ?? '';
 
-            const graphqlEndpoint = process.env.GRAPHQL_ENDPOINT || "https://dev.100protocol.com/";
-
+            const runtimeGraphql = window.APP_SETTINGS?.graphql_endpoint && String(window.APP_SETTINGS.graphql_endpoint);
+            const graphqlEndpoint = runtimeGraphql || process.env.GRAPHQL_ENDPOINT || "https://dev.100protocol.com/";
             // GraphQL query to request an upload URL to R2
             const gqlQuery = `query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {\n  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {\n    challengeId\n    round\n    submissionId\n    maxConcurrentUploadLimit\n    urlArr { url key }\n  }\n}`;
 
@@ -217,6 +228,20 @@ export const instruments = {
 
             // Notify success
             store?.SDK?.invoke?.("toast", { message: "Submission uploaded successfully", type: "success" });
+
+            // Record final submission in backend and disable button
+            try {
+              const projectIdNum2 = Number(projectId ?? null);
+              if (projectIdNum2) {
+                const recResp = await fetch(`/api/projects/${projectIdNum2}/final-submission/`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  credentials: "include",
+                  body: JSON.stringify({}),
+                });
+                if (recResp.ok) setFinalDisabled(true);
+              }
+            } catch (_) {}
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error("Failed to export annotations by me:", err);
@@ -236,19 +261,36 @@ export const instruments = {
               "--wait-color-value-outline": "#EABE00",
             };
 
+        const isDisabled = loading || finalDisabled;
+        const tooltipTitle = loading
+          ? "Uploading your submission..."
+          : finalDisabled
+          ? "Final submission already exists"
+          : "Submit your annotations for evaluation";
+
         return (
-          <Button
-            size={size}
-            look="outlined"
-            variant="primary"
-            onClick={onClick}
-            waiting={loading}
-            disabled={loading}
-            aria-label="End Annotation"
-            style={styleOverride}
+          <Tooltip
+            title={tooltipTitle}
+            style={{
+              maxWidth: 260,
+              textAlign: "center",
+            }}
           >
-            Final Submit
-          </Button>
+            <Block name="button-wrapper">
+              <Button
+                size={size}
+                look="outlined"
+                variant="primary"
+                onClick={onClick}
+                waiting={loading}
+                disabled={isDisabled}
+                aria-label="End Annotation"
+                style={styleOverride}
+              >
+                Final Submit
+              </Button>
+            </Block>
+          </Tooltip>
         );
       }),
     );
