@@ -357,7 +357,7 @@ class OrganizationAPI(generics.RetrieveUpdateAPIView):
 class OrganizationInviteAPI(generics.RetrieveAPIView):
     parser_classes = (JSONParser,)
     queryset = Organization.objects.all()
-    permission_required = all_permissions.organizations_change
+    permission_required = all_permissions.organizations_invite
 
     def get(self, request, *args, **kwargs):
         org = request.user.active_organization

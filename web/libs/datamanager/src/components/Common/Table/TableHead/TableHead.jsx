@@ -1,6 +1,6 @@
 import { observer, useLocalStore } from "mobx-react";
 import { toJS } from "mobx";
-import React, { forwardRef, useCallback, useEffect, useRef } from "react";
+import React, { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { ViewColumnType, ViewColumnTypeName, ViewColumnTypeShort } from "../../../../stores/Tabs/tab_column";
 import { Button } from "@humansignal/ui";
 import { Dropdown } from "../../Dropdown/Dropdown";
@@ -15,6 +15,9 @@ import { getStyle } from "../utils";
 import "./TableHead.scss";
 import { FF_DEV_3873, isFF } from "../../../../utils/feature-flags";
 import { getRoot } from "mobx-state-tree";
+import { AgreementSelected } from "../../../CellViews/AgreementSelected";
+import { IconChevronDown } from "@humansignal/icons";
+import { isActive, FF_AGREEMENT_FILTERED } from "@humansignal/core/lib/utils/feature-flags";
 
 const tableHeadCN = cn("table-head");
 
@@ -64,6 +67,49 @@ const DropdownWrapper = observer(({ column, cellViews, children, onChange }) => 
   );
 });
 
+const AgreementSelectedWrapper = observer(({ column, children }) => {
+  // TODO: make this more generic as a LSE component table header cell
+  const root = getRoot(column.original);
+  const selectedView = root.viewsStore.selected;
+  const agreementFilters = selectedView.agreement_selected;
+  const [isOpen, setIsOpen] = useState(false);
+  const onSave = (agreementFilters) => {
+    selectedView.setAgreementFilters(agreementFilters);
+    return selectedView.save();
+  };
+  const onToggle = (isOpen) => {
+    setIsOpen(isOpen);
+  };
+  return (
+    <Dropdown.Trigger
+      content={
+        isOpen ? (
+          <AgreementSelected.HeaderCell agreementFilters={agreementFilters} onSave={onSave} align="left" />
+        ) : (
+          <></>
+        )
+      }
+      onToggle={onToggle}
+    >
+      <Button
+        look="outlined"
+        variant="neutral"
+        size="small"
+        trailing={<IconChevronDown />}
+        align="left"
+        style={{
+          minWidth: 200,
+          paddingLeft: "0.5rem",
+          flexGrow: 1,
+          width: "100%",
+        }}
+      >
+        {children}
+      </Button>
+    </Dropdown.Trigger>
+  );
+});
+
 const ColumnRenderer = observer(
   ({
     column: columnInput,
@@ -106,6 +152,8 @@ const ColumnRenderer = observer(
       </>
     );
 
+    const isAgreementSelected = isActive(FF_AGREEMENT_FILTERED) && column.type === "AgreementSelected";
+
     return (
       <TableCell data-id={id} mix="th">
         <Resizer
@@ -114,7 +162,7 @@ const ColumnRenderer = observer(
             display: "flex",
             alignItems: "center",
             justifyContent: style.justifyContent ?? "space-between",
-            overflow: "hidden",
+            overflow: isAgreementSelected ? "visible" : "hidden",
           }}
           initialWidth={style.width ?? 150}
           minWidth={style.minWidth ?? 30}
@@ -125,6 +173,8 @@ const ColumnRenderer = observer(
             <DropdownWrapper column={column} cellViews={cellViews} onChange={onTypeChange}>
               {headContent}
             </DropdownWrapper>
+          ) : isAgreementSelected ? (
+            <AgreementSelectedWrapper column={column}>{headContent}</AgreementSelectedWrapper>
           ) : (
             headContent
           )}

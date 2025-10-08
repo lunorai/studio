@@ -275,4 +275,54 @@ describe("OutlinerPanel", () => {
       expect(panelBase).toBeInTheDocument();
     });
   });
+
+  describe("Media time sorting", () => {
+    it("supports mediaStartTime sorting option when media regions are present", () => {
+      const regionsWithMediaTime = {
+        ...mockRegions,
+        sort: "mediaStartTime",
+        regions: [
+          { id: "1", type: "audioregion", start: 5.0, end: 10.0 },
+          { id: "2", type: "audioregion", start: 2.0, end: 7.0 },
+          { id: "3", type: "timelineregion", ranges: [{ start: 15, end: 20 }] },
+          { id: "4", type: "timelineregion", ranges: [{ start: 8, end: 12 }] },
+        ],
+        filter: [
+          { id: "1", type: "audioregion", start: 5.0, end: 10.0 },
+          { id: "2", type: "audioregion", start: 2.0, end: 7.0 },
+          { id: "3", type: "timelineregion", ranges: [{ start: 15, end: 20 }] },
+          { id: "4", type: "timelineregion", ranges: [{ start: 8, end: 12 }] },
+        ],
+      };
+
+      render(<OutlinerPanel {...defaultProps} regions={regionsWithMediaTime} />);
+
+      const viewControls = screen.getByTestId("view-controls");
+      expect(viewControls).toBeInTheDocument();
+      expect(viewControls).toHaveAttribute("ordering", "mediaStartTime");
+    });
+
+    it("hides mediaStartTime sorting option when no media regions are present", () => {
+      const regionsWithoutMediaTime = {
+        ...mockRegions,
+        sort: "date",
+        regions: [
+          { id: "1", type: "rectangle" },
+          { id: "2", type: "polygon" },
+          { id: "3", type: "ellipse" },
+        ],
+        filter: [
+          { id: "1", type: "rectangle" },
+          { id: "2", type: "polygon" },
+          { id: "3", type: "ellipse" },
+        ],
+      };
+
+      render(<OutlinerPanel {...defaultProps} regions={regionsWithoutMediaTime} />);
+
+      const viewControls = screen.getByTestId("view-controls");
+      expect(viewControls).toBeInTheDocument();
+      expect(viewControls).toHaveAttribute("ordering", "date");
+    });
+  });
 });

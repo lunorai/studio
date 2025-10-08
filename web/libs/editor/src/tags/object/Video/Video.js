@@ -79,6 +79,8 @@ const isSyncedBuffering = ff.isActive(ff.FF_SYNCED_BUFFERING);
  * @param {boolean} [muted=false] muted video
  * @param {number} [height=600] height of the video player
  * @param {number} [timelineHeight=64] height of the timeline with regions
+ * @param {number} [defaultPlaybackSpeed=1] default playback speed the player should start with when loaded
+ * @param {number} [minPlaybackSpeed=1] minimum allowed playback speed; defaultPlaybackSpeed cannot be set below this value
  */
 
 const TagAttrs = types.model({
@@ -88,6 +90,8 @@ const TagAttrs = types.model({
   height: types.optional(types.string, "600"),
   timelineheight: types.maybeNull(types.string),
   muted: false,
+  defaultplaybackspeed: types.optional(types.union(types.string, types.number), "1"),
+  minplaybackspeed: types.optional(types.union(types.string, types.number), "0.25"),
 });
 
 const Model = types
@@ -183,6 +187,24 @@ const Model = types
       if (!framerate || Number.isNaN(framerate)) self.framerate = "24";
       else if (framerate < 1) self.framerate = String(1 / framerate);
       else self.framerate = String(framerate);
+
+      // normalize playback speed parameters
+      const data = self.store.task?.dataObj;
+      const defaultPlaybackSpeed = Number(parseValue(String(self.defaultplaybackspeed), data));
+      const minPlaybackSpeed = Number(parseValue(String(self.minplaybackspeed), data));
+
+      // validate and set minPlaybackSpeed
+      self.minplaybackspeed =
+        !minPlaybackSpeed || isNaN(minPlaybackSpeed) || minPlaybackSpeed < 0.05 ? 0.25 : minPlaybackSpeed;
+
+      // validate and set defaultPlaybackSpeed
+      self.defaultplaybackspeed =
+        !defaultPlaybackSpeed || isNaN(defaultPlaybackSpeed) || defaultPlaybackSpeed < 0.05
+          ? 1
+          : Math.max(defaultPlaybackSpeed, self.minplaybackspeed);
+
+      // set initial speed to defaultPlaybackSpeed
+      self.speed = self.defaultplaybackspeed;
     },
   }))
   ////// Sync actions
@@ -291,8 +313,11 @@ const Model = types
     },
 
     handleSpeed(speed) {
-      self.speed = speed;
-      self.triggerSync("speed", { speed });
+      // enforce minimum playback speed
+      const constrainedSpeed = Math.max(speed, self.minplaybackspeed);
+
+      self.speed = constrainedSpeed;
+      self.triggerSync("speed", { speed: constrainedSpeed });
     },
 
     handleSeek() {

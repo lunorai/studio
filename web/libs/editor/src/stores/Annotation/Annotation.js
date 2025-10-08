@@ -664,7 +664,7 @@ const _Annotation = types
           selectedIds[selectedIds.length - 1] ?? regionStore.regions[regionStore.regions.length - 1]?.id,
         );
 
-        if (currentRegion?.type === "polygonregion" || currentRegion?.type === "vectorregion") {
+        if (currentRegion?.type === "polygonregion") {
           const points = currentRegion?.points?.length ?? 0;
 
           stopDrawingAfterNextUndo = points <= 1;

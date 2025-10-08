@@ -34,7 +34,7 @@ const AllRegionsType = types.union(
   ParagraphsRegionModel,
   VideoRectangleRegionModel,
   CustomRegionModel,
-  ...Registry.customTags.map((t) => t.region),
+  ...Registry.customTags.map((t) => t.region).filter(Boolean),
 );
 
 export {

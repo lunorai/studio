@@ -53,7 +53,7 @@ The Annotation Summary shows annotation progress and quality metrics for each me
 
 ### Export Annotation Summary table
 
-You can use the **Export CSV** button to to export the Annotation Summary table.
+You can use the **Export CSV** button to export the Annotation Summary table.
 
 ## Annotator Agreement Matrix
 
@@ -70,3 +70,20 @@ The Agreement Distribution visualizes how agreement scores vary across tasks in 
 - Taller bars toward the right indicate stronger consensus and likely higher data quality.
 - Clusters in the lower agreement ranges may signal ambiguous or difficult tasks, or annotation guideline gaps
 
+## Include model predictions
+
+If your project includes predictions, you will see a **Show Models** toggle:
+
+![Screenshot of toggle](/images/project/models-toggle.png)
+
+When enabled, you will see the following information in model rows of the **Annotation Summary** table:
+
+* **Agreement**: Average agreement between the model and all annotators.
+* **Ground truth**: Average agreement between the model and ground-truth (GT) tasks.
+
+    If you click the link in the Ground Truth column of a model row, you are taken to a filter view of the Data Manager showing tasks with both a GT annotation and this model’s prediction.
+* **Predictions**: Average agreement between the model and all other models.
+
+    If you click the link in the Predictions column of a model row, you are taken to a filter view of the Data Manager showing tasks with this model’s prediction plus at least one other model’s prediction.
+
+Select or deselect model rows to include them in the **Annotator/Model Agreement Matrix**, were you can see model–annotator and model–model agreements.

@@ -68,6 +68,7 @@ class AnnotationDraftFactory(factory.django.DjangoModelFactory):
 class PredictionFactory(factory.django.DjangoModelFactory):
     task = factory.SubFactory(TaskFactory)
     project = factory.SelfAttribute('task.project')
+    result = [{}]
 
     class Meta:
         model = Prediction

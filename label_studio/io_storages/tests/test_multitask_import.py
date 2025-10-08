@@ -111,6 +111,7 @@ def test_import_multiple_tasks_s3(project, common_task_data):
             aws_access_key_id='example',
             aws_secret_access_key='example',
             use_blob_urls=False,
+            recursive_scan=True,
         )
 
 
@@ -124,6 +125,7 @@ def test_import_multiple_tasks_gcs(project, common_task_data):
             # magic bucket name to set correct data in gcs_client_mock
             bucket='multitask_JSON',
             use_blob_urls=False,
+            recursive_scan=True,
         )
 
 
@@ -135,6 +137,7 @@ def test_import_multiple_tasks_azure(project, common_task_data):
             AzureBlobImportStorageFactory,
             common_task_data,
             use_blob_urls=False,
+            recursive_scan=True,
         )
 
 
@@ -169,6 +172,7 @@ def test_storagelink_fields(project, common_task_data):
             aws_access_key_id='example',
             aws_secret_access_key='example',
             use_blob_urls=False,
+            recursive_scan=True,
         )
         storage.save()
         storage.sync()

@@ -3,6 +3,7 @@
 import logging
 
 import ujson as json
+from core.current_request import get_current_request
 from core.feature_flags import flag_set
 from core.label_config import replace_task_data_undefined_with_config_field
 from core.utils.common import load_func, retry_database_locked
@@ -211,8 +212,23 @@ class BaseTaskSerializer(FlexFieldsModelSerializer):
 
     def validate(self, task):
         instance = self.instance if hasattr(self, 'instance') else None
+
+        project = self.project(task=instance)
+
+        current_request = get_current_request()
+        if current_request and current_request.method == 'POST' and not project:
+            # raise ValidationError for the project field with standard DRF message
+            try:
+                self.fields['project'].fail('required')
+            except ValidationError as exc:
+                raise ValidationError(
+                    {
+                        'project': exc.detail,
+                    }
+                )
+
         validator = TaskValidator(
-            self.project(task=instance),
+            project,
             instance=instance if 'data' not in task else None,
         )
         return validator.validate(task)

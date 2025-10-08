@@ -7,7 +7,7 @@ import { applyTransformationToPoints, resetTransformState } from "../utils/trans
 interface VectorTransformerProps {
   selectedPoints: Set<number>;
   initialPoints: BezierPoint[];
-  transformerRef: React.RefObject<Konva.Transformer>;
+  transformerRef: React.RefObject<any>;
   proxyRefs?: React.MutableRefObject<{ [key: number]: Konva.Rect | null }>;
   onPointsChange?: (points: BezierPoint[]) => void;
   onTransformStateChange?: (state: {
@@ -20,7 +20,7 @@ interface VectorTransformerProps {
   onTransformationStart?: () => void;
   onTransformationEnd?: () => void;
   constrainToBounds?: boolean;
-  bounds?: { width: number; height: number };
+  bounds?: { x: number; y: number; width: number; height: number };
 }
 
 export const VectorTransformer: React.FC<VectorTransformerProps> = ({
@@ -35,40 +35,6 @@ export const VectorTransformer: React.FC<VectorTransformerProps> = ({
   constrainToBounds,
   bounds,
 }) => {
-  // Helper function to constrain transformer to bounds
-  const constrainTransformerToBounds = (transformer: Konva.Transformer) => {
-    if (!constrainToBounds || !bounds) return;
-
-    const currentX = transformer.x();
-    const currentY = transformer.y();
-    const currentWidth = transformer.width();
-    const currentHeight = transformer.height();
-
-    let newX = currentX;
-    let newY = currentY;
-
-    // Constrain X position
-    if (newX < 0) {
-      newX = 0;
-    } else if (newX + currentWidth > bounds.width) {
-      newX = bounds.width - currentWidth;
-    }
-
-    // Constrain Y position
-    if (newY < 0) {
-      newY = 0;
-    } else if (newY + currentHeight > bounds.height) {
-      newY = bounds.height - currentHeight;
-    }
-
-    // Apply constrained position if it changed
-    if (newX !== currentX || newY !== currentY) {
-      transformer.x(newX);
-      transformer.y(newY);
-      transformer.getLayer()?.batchDraw();
-    }
-  };
-
   const transformerStateRef = React.useRef<{
     rotation: number;
     scaleX: number;
@@ -102,88 +68,56 @@ export const VectorTransformer: React.FC<VectorTransformerProps> = ({
 
   if (selectedPointCoords.length === 0) return null;
 
+  const TransformerComponent = KonvaTransformer as any;
+
   return (
-    <KonvaTransformer
+    <TransformerComponent
       ref={transformerRef}
       rotateEnabled={true}
       draggable={true}
       keepRatio={false}
       shouldOverdrawWholeArea={true}
-      boundBoxFunc={(_oldBox: any, newBox: any) => {
-        // Constrain transformer to image bounds if bounds checking is enabled
-        if (constrainToBounds && bounds) {
-          const constrainedBox = { ...newBox };
-
-          // Ensure transformer doesn't extend beyond image bounds
-          if (constrainedBox.x < 0) {
-            constrainedBox.x = 0;
-          }
-          if (constrainedBox.y < 0) {
-            constrainedBox.y = 0;
-          }
-          if (constrainedBox.x + constrainedBox.width > bounds.width) {
-            constrainedBox.x = bounds.width - constrainedBox.width;
-          }
-          if (constrainedBox.y + constrainedBox.height > bounds.height) {
-            constrainedBox.y = bounds.height - constrainedBox.height;
-          }
-
-          return constrainedBox;
-        }
-
-        return newBox;
-      }}
+      // boundBoxFunc={(_oldBox: any, newBox: any) => {
+      //   // Temporarily disable bounds checking for rotation/resize
+      //   // Only apply bounds checking to drag operations
+      //   return newBox;
+      // }}
       dragBoundFunc={(pos: any) => {
-        // Constrain transformer dragging to image bounds
+        // Reject drag if it would go outside image bounds
         if (constrainToBounds && bounds) {
           const transformer = transformerRef.current;
           if (transformer) {
             const width = transformer.width();
             const height = transformer.height();
 
-            let newX = pos.x;
-            let newY = pos.y;
-
-            // Constrain X position
-            if (newX < 0) {
-              newX = 0;
-            } else if (newX + width > bounds.width) {
-              newX = bounds.width - width;
+            // Check if the new position would extend beyond image bounds
+            if (
+              pos.x < bounds.x ||
+              pos.y < bounds.y ||
+              pos.x + width > bounds.x + bounds.width ||
+              pos.y + height > bounds.y + bounds.height
+            ) {
+              // Return the current position to prevent the drag
+              return { x: transformer.x(), y: transformer.y() };
             }
-
-            // Constrain Y position
-            if (newY < 0) {
-              newY = 0;
-            } else if (newY + height > bounds.height) {
-              newY = bounds.height - height;
-            }
-
-            return { x: newX, y: newY };
           }
         }
 
         return pos;
       }}
       resizeBoundFunc={(oldBox: any, newBox: any) => {
-        // Constrain transformer resizing to image bounds
+        // Reject resize if it would go outside image bounds
         if (constrainToBounds && bounds) {
-          const constrainedBox = { ...newBox };
-
-          // Ensure transformer doesn't extend beyond image bounds during resize
-          if (constrainedBox.x < 0) {
-            constrainedBox.x = 0;
+          // Check if the new bounding box would extend beyond image bounds
+          if (
+            newBox.x < bounds.x ||
+            newBox.y < bounds.y ||
+            newBox.x + newBox.width > bounds.x + bounds.width ||
+            newBox.y + newBox.height > bounds.y + bounds.height
+          ) {
+            // Return the old box to prevent the resize
+            return oldBox;
           }
-          if (constrainedBox.y < 0) {
-            constrainedBox.y = 0;
-          }
-          if (constrainedBox.x + constrainedBox.width > bounds.width) {
-            constrainedBox.width = bounds.width - constrainedBox.x;
-          }
-          if (constrainedBox.y + constrainedBox.height > bounds.height) {
-            constrainedBox.height = bounds.height - constrainedBox.y;
-          }
-
-          return constrainedBox;
         }
 
         return newBox;
@@ -193,9 +127,6 @@ export const VectorTransformer: React.FC<VectorTransformerProps> = ({
         const transformer = transformerRef.current;
         if (transformer) {
           try {
-            // Constrain transformer to bounds after transformation
-            constrainTransformerToBounds(transformer);
-
             const transformerCenter = {
               x: transformer.x() + transformer.width() / 2,
               y: transformer.y() + transformer.height() / 2,
@@ -270,9 +201,6 @@ export const VectorTransformer: React.FC<VectorTransformerProps> = ({
         const transformer = transformerRef.current;
         if (transformer) {
           try {
-            // Constrain transformer to bounds during drag
-            constrainTransformerToBounds(transformer);
-
             const transformerCenter = {
               x: transformer.x() + transformer.width() / 2,
               y: transformer.y() + transformer.height() / 2,

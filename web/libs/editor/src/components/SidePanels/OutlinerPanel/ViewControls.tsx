@@ -8,9 +8,10 @@ import {
   IconPredictions,
   IconSortDown,
   IconSortUp,
+  IconTimelineRegion,
 } from "@humansignal/icons";
 import { Button } from "@humansignal/ui";
-import { type FC, useCallback, useContext, useMemo } from "react";
+import { type FC, useCallback, useContext, useEffect, useMemo } from "react";
 import { Dropdown } from "../../../common/Dropdown/Dropdown";
 // eslint-disable-next-line
 // @ts-ignore
@@ -25,7 +26,7 @@ const { Block, Elem } = BemWithSpecifiContext();
 
 export type GroupingOptions = "manual" | "label" | "type";
 
-export type OrderingOptions = "score" | "date";
+export type OrderingOptions = "score" | "date" | "mediaStartTime";
 
 export type OrderingDirection = "asc" | "desc";
 
@@ -42,6 +43,24 @@ export const ViewControls: FC<ViewControlsProps> = observer(
   ({ ordering, regions, orderingDirection, onOrderingChange, onGroupingChange, onFilterChange }) => {
     const grouping = regions.group;
     const context = useContext(SidePanelsContext);
+
+    // Check labeling configuration for media-time-capable object tags
+    const mediaTimeSupport: boolean | null = useMemo(() => {
+      const names = regions.annotation?.names;
+      if (!names || names.size === 0) return null;
+      // Any object tag of type audio, video, or timeseries enables the option
+      return Array.from(names.values()).some(
+        (tag: any) => tag?.isObjectTag && ["audio", "video", "timeseries"].includes(tag.type),
+      );
+    }, [regions.annotation?.names]);
+
+    // Auto-fallback to "date" if current ordering is "mediaStartTime" but no media-time support in config
+    useEffect(() => {
+      if (ordering === "mediaStartTime" && mediaTimeSupport === false) {
+        onOrderingChange("date");
+      }
+    }, [ordering, mediaTimeSupport, onOrderingChange]);
+
     const getGroupingLabels = useCallback((value: GroupingOptions): LabelInfo => {
       switch (value) {
         case "manual":
@@ -102,6 +121,16 @@ export const ViewControls: FC<ViewControlsProps> = observer(
             selectedLabel: "By Score",
             icon: <IconPredictions width={16} height={16} />,
           };
+        case "mediaStartTime":
+          return {
+            label: (
+              <>
+                <IconTimelineRegion /> Order by Media Start Time
+              </>
+            ),
+            selectedLabel: "By Media Start Time",
+            icon: <IconTimelineRegion width={16} height={16} />,
+          };
       }
     }, []);
 
@@ -120,11 +149,12 @@ export const ViewControls: FC<ViewControlsProps> = observer(
             <Grouping
               value={ordering}
               direction={orderingDirection}
-              options={["score", "date"]}
+              options={mediaTimeSupport ? ["score", "date", "mediaStartTime"] : ["score", "date"]}
               onChange={(value) => onOrderingChange(value)}
               readableValueForKey={getOrderingLabels}
               allowClickSelected
               extraIcon={renderOrderingDirectionIcon}
+              width={230}
             />
           </Elem>
         )}
@@ -149,6 +179,7 @@ interface GroupingProps<T extends string> {
   onChange: (value: T) => void;
   readableValueForKey: (value: T) => LabelInfo;
   extraIcon?: JSX.Element;
+  width?: number;
 }
 
 const Grouping = <T extends string>({
@@ -159,6 +190,7 @@ const Grouping = <T extends string>({
   onChange,
   readableValueForKey,
   extraIcon,
+  width = 200,
 }: GroupingProps<T>) => {
   const readableValue = useMemo(() => {
     return readableValueForKey(value);
@@ -166,15 +198,15 @@ const Grouping = <T extends string>({
 
   const optionsList: [T, LabelInfo][] = useMemo(() => {
     return options.map((key) => [key, readableValueForKey(key)]);
-  }, []);
+  }, [options, readableValueForKey]);
 
   const dropdownContent = useMemo(() => {
     return (
       <Menu
         size="medium"
         style={{
-          width: 200,
-          minWidth: 200,
+          width,
+          minWidth: width,
           borderRadius: isFF(FF_DEV_3873) && 4,
         }}
         selectedKeys={[value]}
@@ -195,7 +227,7 @@ const Grouping = <T extends string>({
   }, [value, optionsList, readableValue, direction, onChange]);
 
   return (
-    <Dropdown.Trigger content={dropdownContent} style={{ width: 200 }}>
+    <Dropdown.Trigger content={dropdownContent} style={{ width }}>
       <Button
         variant="neutral"
         size="smaller"

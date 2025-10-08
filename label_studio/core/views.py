@@ -125,8 +125,7 @@ def version_page(request):
                 if not key.startswith('_') and not hasattr(getattr(settings, key), '__call__')
             }
 
-        result = json.dumps(result, indent=2)
-        result = result.replace('},', '},\n').replace('\\n', ' ').replace('\\r', '')
+        result = json.dumps(result, indent=2, ensure_ascii=False)
         return HttpResponse('<pre>' + result + '</pre>')
     else:
         return JsonResponse(result)
@@ -279,7 +278,7 @@ def localfiles_data(request):
 
 def static_file_with_host_resolver(path_on_disk, content_type):
     """Load any file, replace {{HOSTNAME}} => settings.HOSTNAME, send it as http response"""
-    path_on_disk = os.path.join(os.path.dirname(__file__), path_on_disk)
+    path_on_disk = os.path.join(settings.STATIC_ROOT, path_on_disk)
 
     def serve_file(request):
         with open(path_on_disk, 'r') as f:

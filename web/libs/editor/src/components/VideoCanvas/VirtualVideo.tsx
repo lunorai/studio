@@ -5,6 +5,7 @@ import { patchPlayPauseMethods } from "../../utils/patchPlayPauseMethods";
 
 type VirtualVideoProps = DetailedHTMLProps<VideoHTMLAttributes<HTMLVideoElement>, HTMLVideoElement> & {
   canPlayType?: (supported: boolean) => void;
+  speed?: number;
 };
 
 const DEBUG_MODE = false;
@@ -95,6 +96,7 @@ export const VirtualVideo = forwardRef<HTMLVideoElement, VirtualVideoProps>((pro
     videoEl.muted = !!props.muted;
     videoEl.controls = false;
     videoEl.preload = "auto";
+    videoEl.playbackRate = props.speed ?? 1;
 
     if (isFF(FF_LSDV_4711)) videoEl.crossOrigin = "anonymous";
 

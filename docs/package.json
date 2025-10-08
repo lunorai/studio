@@ -10,7 +10,6 @@
     "version": "6.3.0"
   },
   "dependencies": {
-    "@notionhq/client": "^2.2.3",
     "@sanity/client": "^3.4.1",
     "co": "^4.6.0",
     "concat-md": "^0.5.1",
@@ -37,7 +36,6 @@
     "hexo-renderer-stylus": "^0.3.3",
     "hexo-server": "^3.0.0",
     "node-html-parser": "^6.1.4",
-    "notion-to-md": "https://github.com/huguestennier/notion-to-md",
     "save": "^2.4.0"
   },
   "resolutions": {

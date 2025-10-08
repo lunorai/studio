@@ -1,6 +1,6 @@
 import { Button, cnm, IconCheck, IconCopy } from "@humansignal/ui";
 import styles from "./code-block.module.scss";
-import { useCopyText } from "@humansignal/core";
+import { useCopyText } from "@humansignal/core/lib/hooks/useCopyText";
 
 export function CodeBlock({
   code,

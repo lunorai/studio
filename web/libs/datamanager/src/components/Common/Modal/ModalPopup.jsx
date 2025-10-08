@@ -1,12 +1,10 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { IconCross } from "@humansignal/icons";
-import { BemWithSpecifiContext, cn } from "../../../utils/bem";
+import { cn } from "../../../utils/bem";
 import { aroundTransition } from "@humansignal/core/lib/utils/transition";
 import { Button } from "@humansignal/ui";
 import "./Modal.scss";
-
-const { Block, Elem } = BemWithSpecifiContext();
 
 export class Modal extends React.Component {
   modalRef = React.createRef();
@@ -77,12 +75,12 @@ export class Modal extends React.Component {
     const mixes = [this.transitionClass, this.props.className];
 
     const modalContent = (
-      <Block name="modal-dm" ref={this.modalRef} mod={mods} mix={mixes} onClick={this.onClickOutside}>
-        <Elem name="wrapper">
-          <Elem name="content" style={this.props.style}>
+      <div className={cn("modal-dm").mod(mods).mix(mixes)} ref={this.modalRef} onClick={this.onClickOutside}>
+        <div className={cn("modal-dm").elem("wrapper")}>
+          <div className={cn("modal-dm").elem("content")} style={this.props.style}>
             {!bare && (
               <Modal.Header>
-                <Elem name="title">{this.state.title}</Elem>
+                <div className={cn("modal-dm").elem("title")}>{this.state.title}</div>
                 {this.props.allowClose !== false && (
                   <Button name="close" look="string" onClick={() => this.hide()}>
                     <IconCross />
@@ -90,13 +88,11 @@ export class Modal extends React.Component {
                 )}
               </Modal.Header>
             )}
-            <Elem name="body" mod={{ bare }}>
-              {this.body}
-            </Elem>
+            <div className={cn("modal-dm").elem("body").mod({ bare })}>{this.body}</div>
             {this.state.footer && <Modal.Footer>{this.state.footer}</Modal.Footer>}
-          </Elem>
-        </Elem>
-      </Block>
+          </div>
+        </div>
+      </div>
     );
 
     return createPortal(modalContent, document.body);
@@ -165,9 +161,7 @@ export class Modal extends React.Component {
 }
 
 Modal.Header = ({ children, divided }) => (
-  <Elem name="header" mod={{ divided }}>
-    {children}
-  </Elem>
+  <div className={cn("modal-dm").elem("header").mod({ divided })}>{children}</div>
 );
 
-Modal.Footer = ({ children }) => <Elem name="footer">{children}</Elem>;
+Modal.Footer = ({ children }) => <div className={cn("modal-dm").elem("footer")}>{children}</div>;

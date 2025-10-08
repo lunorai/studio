@@ -10,27 +10,24 @@ meta_description: Manage, filter, and sort project data for your labeling projec
 section: "Create & Manage Projects"
 parent: "manage_projects_lso"
 parent_enterprise: "manage_projects" 
-
 ---
 
-After you [set up your project](setup_project.html) and [labeling interface](setup.html) and [import your data](tasks.html), you can filter and sort your data to prepare it for [labeling](labeling.html).
+The Data Manager page is where you can view all your labeling tasks, sort and filter your data, import and export data, and perform various actions related to tasks. 
 
-You can also take steps to manage your data, such as assigning annotators to tasks in Label Studio Enterprise, or deleting tasks and annotations if needed. 
+For information on setting up a project, see [Create and configure projects](setup_project). 
 
 <div class="opensource-only">
-<br><br>
-<center><i>Data Manager Screenshot</i></center>
-<img class="make-intense-zoom" src="/images/terms/os/project--data-manager-min.png" alt="Screenshot of the Label Studio UI showing an OCR project including photographs of receipts, prediction scores, and other metadata for each labeling task.">
+
+![Screenshot of the Data Manager](/images/project/dm-community.png)
+
 </div>
 
 
 <div class="enterprise-only">
-<br><br>
-<center><i>Data Manager Screenshot</i></center>
-<img class="make-intense-zoom" src="/images/terms/ent/project--data-manager-min.png" alt="Screenshot of the Label Studio UI showing an OCR project including photographs of receipts, prediction scores, and other metadata for each labeling task.">
+
+![Screenshot of the Data Manager](/images/project/dm-community.png)
+
 </div>
-
-
 
 In Label Studio Community Edition, the data manager is the default view for your data. In Label Studio Enterprise, click **Data Manager** to open and view the data manager page. Every row in the data manager represents a labeling task in your dataset.
 
@@ -134,3 +131,100 @@ If you have duplicate tasks, or want to remove annotations, you can delete tasks
 5. Click **Ok** to confirm your action.
 
 If you want to make changes to the labeling interface or perform a different type of data labeling, first select all the annotations for your dataset and delete the annotations.
+
+<div class="enterprise-only">
+
+## Agreement and Agreement (Selected) columns
+
+These two columns allow you to see agreement scores at a task level. 
+
+### Agreement
+
+This is the average agreement score between all annotators for a particular task. Each annotation pair's agreement score will be calculated as new annotations are submitted. For example if there are three annotations for a task, there will be three unique annotation pairs, and the agreement column will show the average agreement score of those three pairs. 
+
+Here is an example with a simple label config. Let's assume we are using ["Exact matching choices" agreement calculation](stats#Exact-matching-choices-example)
+```xml
+<View>
+  <Image name="image_object" value="$image_url"/>
+  <Choices name="image_classes" toName="image_object">
+    <Choice value="Cat"/>
+    <Choice value="Dog"/>
+  </Choices>
+</View>
+```
+Annotation 1: `Cat`
+Annotation 2: `Dog` 
+Annotation 3: `Cat` 
+
+The three unique pairs are
+1. Annotation 1 <> Annotation 2 - agreement score is `0`
+2. Annotation 1 <> Annotation 3 - agreement score is `1`
+3. Annotation 2 <> Annotation 3 - agreement score is `0`
+
+The agreement column for this task would show the average of all annotation pair's agreement score - `33%`
+
+### Agreement (Selected)
+
+The agreement (selected) column builds on top of the agreement column, allowing you to get agreement scores between annotators, ground truth, and model versions. The column header is a dropdown where you can make your selection of what to include in the calculation. 
+
+<img src="/images/project/agreement-selected.png" class="gif-border" style="max-width:679px">
+
+At least two selections need to be made before clicking Apply, which will calculate scores based on your selection and update the column with the appropriate scores. 
+
+The available selections are
+- Ground truth
+- All Annotators
+    - Any subset of annotators
+- All Model Versions
+    - Any subset of model versions
+  
+
+There are three types of scores that can be aggregated here
+1. Annotation vs annotation agreement scores (e.g. selecting two or more annotators)
+2. Annotation vs model version scores (e.g. selecting at least one annotator AND at least one model version)
+3. Model version vs model version scores (e.g. selecting two or more model versions)
+
+If "Ground truth" is selected, all scores from pairs that include a ground truth annotation will also be included in the aggregate score displayed in the column. 
+
+Example using the same simple label config as above
+```xml
+<View>
+  <Image name="image_object" value="$image_url"/>
+  <Choices name="image_classes" toName="image_object">
+    <Choice value="Cat"/>
+    <Choice value="Dog"/>
+  </Choices>
+</View>
+```
+
+Lets say for one task we have the following:
+1. Annotation 1 from annotator 1 - `Cat` (marked as ground truth)
+2. Annotation 2 from annotator 2 - `Dog`
+3. Prediction 1 from model version 1 - `Dog` 
+4. Prediction 2 from model version 2 - `Cat` 
+
+Here is how the score would be calculated for various selections in the dropdown
+
+#### `All Annotators` selected, `Ground Truth` and `All Model Versions` unselected
+This will match the behavior of the `Agreement` column - all annotation pair's scores will be averaged
+1. Annotation 1 <> Annotation 2 - agreement score is `0`
+
+Score displayed in column for this task: `0%`
+
+#### `All Annotators` and `All Model Versions` selected, `Ground Truth` unselected
+This will average all annoations pair's scores, as well as all annotation <> model version pair's scores
+1. Annotation 1 <> Annotation 2 - agreement score is `0`
+4. Annotation 1 <> Prediction 1 - agreement score is `0`
+5. Annotation 1 <> Prediction 2 - agreement score is `1`
+6. Annotation 2 <> Prediction 1 - agreement score is `1`
+7. Annotation 2 <> Prediction 2 - agreement score is `0`
+
+Score displayed in column for this task: `40%` 
+
+#### `Ground Truth` and `model version 2` selected
+This will compare all ground truth annotations with all predictions from `model version 2`
+Annotation 1 is marked as ground truth and Prediction 2 is from `model version 2`
+1. Annotation 1 <> Prediction 2 - agreement score is `1`
+
+Score displayed in column for this task: `100%` 
+</div>

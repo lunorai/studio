@@ -321,17 +321,12 @@ class VideoViewHelper extends withMedia(
       return this.frameCounter.invoke("text").then((text) => Number.parseInt(text.split(" ")[0]));
     }
 
-    // Wait a couple of animation frames based on requestAnimationFrame pattern
+    /**
+     * Wait a couple of animation frames based on the requestAnimationFrame pattern
+     */
     waitForStableState() {
       // This ensures React has completed its render cycle
-      cy.window().then((win) => {
-        return new Cypress.Promise((resolve) => {
-          win.requestAnimationFrame(() => {
-            // Wait one more frame to be extra sure
-            win.requestAnimationFrame(resolve);
-          });
-        });
-      });
+      cy.waitForFrames(2);
     }
 
     // Wait for region by index to be passed to Konva Stage

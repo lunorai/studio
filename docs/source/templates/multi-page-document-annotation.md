@@ -3,7 +3,7 @@ title: Multi-Page Document Annotation
 type: templates
 category: Computer Vision
 cat: computer-vision
-order: 112
+order: 128
 meta_title: Multi-page Document Annotation 
 meta_description: Template for labeling large, multi-page documents more easily and efficiently.
 ---

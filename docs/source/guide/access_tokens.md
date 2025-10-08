@@ -11,7 +11,7 @@ section: "Manage Your Organization"
 date: 2025-02-18 12:03:59
 ---
 
-Label Studio has personal access tokens and legacy tokens. The options available to users are set at the Organization level. Se [Access settings for orgs](#Access-token-settings-for-orgs) below. 
+Label Studio has personal access tokens and legacy tokens. These tokens are also referred to as your "API keys." 
 
 <table>
 <thead>
@@ -26,7 +26,8 @@ Label Studio has personal access tokens and legacy tokens. The options available
         <li>Have a TTL that can be set at the org level. (Label Studio Enterprise only)
         <li>Are only visible to users once
         <li>Can be manually revoked
-        <li>Require extra steps when used with HTTP API
+        <li>Require <a href="#HTTP-API">extra steps</a> when used with HTTP API
+        <li> <code>-H 'Authorization: Bearer &lt;token&gt;'</code> with HTTP API requests
         <li>Only need to be set once when used SDK
     </ul>
   </td>
@@ -36,17 +37,55 @@ Label Studio has personal access tokens and legacy tokens. The options available
         <li>Remains listed and available in your account settings
         <li>Can be manually revoked
         <li>Do not need to be refreshed with used with HTTP API
+        <li> <code>-H 'Authorization: Token  &lt;token&gt;'</code> with HTTP API requests
         <li>Only need to be set once when used SDK
     </ul>
   </td>
   </tr>
 </table>
 
-## Personal access tokens and the API
+## Find your API keys
+
+You can access your API keys by clicking your user icon in the upper right and selecting **Account & Settings**. 
+
+If you do not see either the **Personal Access Tokens** or **Legacy Tokens** page, that means you first need to enable them for your organization.
+
+## Enable API keys for an organization
+
+The options that users see on their **Account & Settings** page depend on your settings at the organization level. 
+
+From the **Organization** page, select **Settings > Access Token Settings**. 
+
+<div class="enterprise-only">
+
+!!! note
+    The **Organization** page is only available to users in the Admin and Owner role.
+
+</div>
+
+From here you can enable and disable token types. 
+
+* When a certain token type is disabled, existing tokens will not be able to authenticate to the Label Studio platform. 
+
+* Use the Personal Access Token Time-to-Live to set an expiration date for personal access tokens. (Enterprise only)
+
+<div class="enterprise-only">
+
+<img src="/images/admin/token-settings.png" style="max-width: 668px" alt="Screenshot of Access Token window">
+
+</div>
+
+<div class="opensource-only">
+
+<img src="/images/admin/token-settings-lso.png" style="max-width: 475px" alt="Screenshot of Access Token window">
+
+</div>
+
+## Personal access tokens
 
 ### SDK
 
-Personal access tokens can be used with the Python SDK the same way in which legacy tokens were set:
+Personal access tokens (API keys) can be used with the Python SDK the same way in which legacy tokens were set:
 
 ```python
 # Define the URL where Label Studio is accessible and the API key for your user account
@@ -87,7 +126,7 @@ In response, you will receive a JSON payload similar to:
 Use this access token by including it in your API requests via the Authorization header:
      
 ```http
-Authorization: Bearer your-new-access-token
+Authorization: Bearer your-personal-access-token
 ```
 
 When that access token expires (after around 5 minutes) you’ll get a 401 response, and will need to use your personal access token again to acquire a new one. This adds an extra layer of security.
@@ -104,31 +143,19 @@ exp = decoded.get("exp")
 token_is_expired = (exp <= datetime.now(timezone.utc).timestamp())
 ```
 
-## Access token settings for orgs
 
-The options that are available to users depend on options selected at the organization level. 
+## Legacy tokens
 
-From the **Organization** page, click **Access Token Settings** in the upper right. 
+Generally speaking, the legacy tokens are not as secure as JWT because they must be manually revoked. 
 
-<div class="enterprise-only">
+However, they are easier to use with HTTP API (such as in `cUrl` commands) and required for use with the [Label Studio ML backend](https://github.com/HumanSignal/label-studio-ml-backend).
+
+Use this access token by including it in your API requests via the Authorization header:
+     
+```http
+Authorization: Token your-legacy-token
+```
 
 !!! note
-    The **Organization** page is only available to users in the Admin and Owner role.
-
-</div>
-
-From here you can enable and disable token types. 
-
-* When a certain token type is disabled, existing tokens will not be able to authenticate to the Label Studio platform. 
-
-* Use the Personal Access Token Time-to-Live to set an expiration date for personal access tokens. This is only available for Label Studio Enterprise users. 
-
-
-![Screenshot of Access Token window](/images/admin/token-settings.png)
-
-
-## Finding your access token
-
-You can create/manage your access token from your [**Account & Settings** page](user_account) (click your username in the upper right in Label Studio). 
-
+    Use `Token` with the legacy token and `Bearer` with the personal access token. 
 

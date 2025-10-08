@@ -25,6 +25,7 @@ import { RootPage } from "./RootPage";
 import { ff } from "@humansignal/core";
 import "@humansignal/ui/src/tailwind.css";
 import "./App.scss";
+import { AuthProvider } from "@humansignal/core/providers/AuthProvider";
 
 const baseURL = new URL(APP_SETTINGS.hostname || location.origin);
 export const UNBLOCK_HISTORY_MESSAGE = "UNBLOCK_HISTORY";
@@ -64,6 +65,7 @@ const App = ({ content }) => {
           providers={[
             <QueryClientProvider client={queryClient} key="query" />,
             <JotaiProvider key="jotai" store={JotaiStore} />,
+            <AuthProvider key="auth" />,
             <AppStoreProvider key="app-store" />,
             <ToastProvider key="toast" />,
             <ApiProvider key="api" />,

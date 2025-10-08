@@ -726,7 +726,7 @@ export function createMouseMoveHandler(props: EventHandlerProps, handledSelectio
 }
 
 export function createMouseUpHandler(props: EventHandlerProps) {
-  return () => {
+  return (e: KonvaEventObject<MouseEvent>) => {
     // Store drag info before resetting state
     const wasGhostDrag = props.ghostPointDragInfo?.isDragging;
     const hadNewPointDragIndex = props.newPointDragIndex !== null;
@@ -745,17 +745,7 @@ export function createMouseUpHandler(props: EventHandlerProps) {
     if (props.draggedPointIndex !== null && !props.isDragging.current) {
       // Check if this point click should trigger path closing instead of selection
       const pointIndex = props.draggedPointIndex;
-      // Create a mock event for the helper function (since mouse up doesn't have the full event)
-      const mockEvent = {
-        evt: {
-          shiftKey: false,
-          ctrlKey: false,
-          metaKey: false,
-          altKey: false,
-        },
-      } as KonvaEventObject<MouseEvent>;
-      const shouldClose =
-        shouldClosePathOnPointClick(pointIndex, props, mockEvent) && isActivePointEligibleForClosing(props);
+      const shouldClose = shouldClosePathOnPointClick(pointIndex, props, e) && isActivePointEligibleForClosing(props);
 
       if (shouldClose) {
         // Try to close the path instead of selecting the point
@@ -764,11 +754,11 @@ export function createMouseUpHandler(props: EventHandlerProps) {
         const closed = closePathBetweenFirstAndLast(props, fromPointIndex, toPointIndex);
         if (!closed) {
           // Path closing failed, fall back to point selection
-          handlePointSelectionFromIndex(pointIndex, props);
+          handlePointSelectionFromIndex(pointIndex, props, e);
         }
       } else {
         // Normal point selection
-        handlePointSelectionFromIndex(pointIndex, props);
+        handlePointSelectionFromIndex(pointIndex, props, e);
       }
     }
 
@@ -808,7 +798,13 @@ export function createMouseUpHandler(props: EventHandlerProps) {
           y: ghostPoint.y,
           segmentIndex: props.initialPoints.findIndex((p) => p.id === ghostPoint.nextPointId),
         };
-        addPointFromGhostDrag(props, ghostPointWithSegmentIndex, dragDistance);
+        const success = addPointFromGhostDrag(props, ghostPointWithSegmentIndex, dragDistance);
+        if (success) {
+          // Update timing when point is successfully added
+          if (props.lastCallbackTime?.current !== undefined) {
+            props.lastCallbackTime.current = Date.now();
+          }
+        }
       }
     }
 
@@ -944,6 +940,7 @@ export function createClickHandler(props: EventHandlerProps, handledSelectionInM
 
         if (distance <= hitRadius) {
           // We clicked on an existing point, don't create new points
+          // Note: onFinish logic is handled in handlePointSelection above
           return;
         }
       }
@@ -972,14 +969,25 @@ export function createClickHandler(props: EventHandlerProps, handledSelectionInM
   };
 }
 
-export function createDblClickHandler(props: EventHandlerProps) {
-  return (e: KonvaEventObject<MouseEvent>) => {
-    // Double-click functionality removed - now handled by cmd-click in click handler
-  };
-}
-
 // Helper function to select a point by index
-function handlePointSelectionFromIndex(pointIndex: number, props: EventHandlerProps) {
+function handlePointSelectionFromIndex(
+  pointIndex: number,
+  props: EventHandlerProps,
+  event: KonvaEventObject<MouseEvent>,
+) {
+  // Check if this is the active point (the one user is currently drawing from)
+  if (
+    props.activePointId &&
+    pointIndex < props.initialPoints.length &&
+    !(event.evt.ctrlKey || event.evt.shiftKey || event.evt.metaKey || event.evt.altKey)
+  ) {
+    const point = props.initialPoints[pointIndex];
+    if (point.id === props.activePointId) {
+      props.onFinish?.(event!);
+      return; // Don't proceed with selection
+    }
+  }
+
   // For now, just do single selection since we don't have access to modifier keys in mouse up
   // Multi-selection will be handled by the existing point selection logic in mouse down
 
@@ -990,6 +998,10 @@ function handlePointSelectionFromIndex(pointIndex: number, props: EventHandlerPr
   // Update activePointId for skeleton mode - set the selected point as the active point
   if (pointIndex >= 0 && pointIndex < props.initialPoints.length) {
     const selectedPoint = props.initialPoints[pointIndex];
-    props.setActivePointId?.(selectedPoint.id);
+    // In skeleton mode, always update the active point when selecting a point
+    // This ensures onFinish only fires for the currently selected point
+    if (props.skeletonEnabled) {
+      props.setActivePointId?.(selectedPoint.id);
+    }
   }
 }

@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 from core.feature_flags import flag_set
 from core.utils.common import load_func
+from data_import.uploader import load_tasks_for_async_import_streaming
 from django.conf import settings
 from django.db import transaction
 from label_studio_sdk.label_interface import LabelInterface
@@ -38,6 +39,11 @@ def async_import_background(
         project_import.save(update_fields=['status'])
 
     user = User.objects.get(id=user_id)
+
+    if flag_set('fflag_fix_back_plt_902_async_import_background_oom_fix_22092025_short', user='auto'):
+        logger.info(f'Using streaming import for project {project_import.project.id}')
+        _async_import_background_streaming(project_import, user)
+        return
 
     start = time.time()
     project = project_import.project
@@ -389,6 +395,165 @@ def _async_reimport_background_streaming(reimport, project, organization_id, use
         reimport.traceback = traceback.format_exc()
         reimport.error = str(e)
         reimport.save()
+        raise
+
+
+def _async_import_background_streaming(project_import, user):
+    try:
+        batch_size = settings.IMPORT_BATCH_SIZE
+
+        total_task_count = 0
+        total_annotation_count = 0
+        total_prediction_count = 0
+        all_created_task_ids = []
+
+        project = project_import.project
+        start = time.time()
+
+        batch_number = 0
+        streaming_generator = load_tasks_for_async_import_streaming(project_import, user, batch_size)
+
+        final_file_upload_ids = []
+        final_found_formats = {}
+        final_data_columns = set()
+
+        for batch_tasks, file_upload_ids, found_formats, data_columns in streaming_generator:
+            if not batch_tasks:
+                logger.info(f'Empty batch received for import {project_import.id}')
+                continue
+
+            batch_number += 1
+            logger.info(
+                f'Processing batch {batch_number} with {len(batch_tasks)} tasks for import {project_import.id}'
+            )
+
+            if file_upload_ids and file_upload_ids not in final_file_upload_ids:
+                final_file_upload_ids = file_upload_ids
+            final_found_formats.update(found_formats)
+            final_data_columns.update(data_columns)
+
+            if project_import.preannotated_from_fields:
+                raise_errors = flag_set(
+                    'fflag_feat_utc_210_prediction_validation_15082025', user=project.organization.created_by
+                )
+                logger.info(f'Reformatting predictions with raise_errors: {raise_errors}')
+                batch_tasks = reformat_predictions(
+                    batch_tasks, project_import.preannotated_from_fields, project, raise_errors
+                )
+
+            if project.label_config_is_not_default and flag_set(
+                'fflag_feat_utc_210_prediction_validation_15082025', user=project.organization.created_by
+            ):
+                validation_errors = []
+                li = LabelInterface(project.label_config)
+
+                for i, task in enumerate(batch_tasks):
+                    if 'predictions' in task:
+                        for j, prediction in enumerate(task['predictions']):
+                            try:
+                                validation_errors_list = li.validate_prediction(prediction, return_errors=True)
+                                if validation_errors_list:
+                                    for error in validation_errors_list:
+                                        validation_errors.append(
+                                            f'Task {total_task_count + i}, prediction {j}: {error}'
+                                        )
+                            except Exception as e:
+                                error_msg = f'Task {total_task_count + i}, prediction {j}: Error validating prediction - {str(e)}'
+                                validation_errors.append(error_msg)
+                                logger.error(f'Exception during validation: {error_msg}')
+
+                if validation_errors:
+                    error_message = f'Prediction validation failed ({len(validation_errors)} errors):\n'
+                    for error in validation_errors:
+                        error_message += f'- {error}\n'
+
+                    if flag_set(
+                        'fflag_feat_utc_210_prediction_validation_15082025', user=project.organization.created_by
+                    ):
+                        project_import.error = error_message
+                        project_import.status = ProjectImport.Status.FAILED
+                        project_import.save(update_fields=['error', 'status'])
+                        return
+                    else:
+                        logger.error(
+                            f'Prediction validation failed, not raising error - ({len(validation_errors)} errors):\n{error_message}'
+                        )
+
+            if project_import.commit_to_project:
+                with transaction.atomic():
+                    summary = ProjectSummary.objects.select_for_update().get(project=project)
+
+                    serializer = ImportApiSerializer(data=batch_tasks, many=True, context={'project': project})
+                    serializer.is_valid(raise_exception=True)
+                    batch_db_tasks = serializer.save(project_id=project.id)
+
+                    all_created_task_ids.extend([t.id for t in batch_db_tasks])
+
+                    batch_task_count = len(batch_db_tasks)
+                    batch_annotation_count = len(serializer.db_annotations)
+                    batch_prediction_count = len(serializer.db_predictions)
+
+                    total_task_count += batch_task_count
+                    total_annotation_count += batch_annotation_count
+                    total_prediction_count += batch_prediction_count
+
+                    summary.update_data_columns(batch_db_tasks)
+
+            else:
+                total_task_count += len(batch_tasks)
+
+            logger.info(f'Batch {batch_number} processed successfully: {len(batch_tasks)} tasks')
+
+        final_data_columns = list(final_data_columns)
+
+        if project_import.commit_to_project and all_created_task_ids:
+            logger.info(
+                f'Finalizing import: emitting webhooks and updating task states for {len(all_created_task_ids)} tasks'
+            )
+
+            emit_webhooks_for_instance(
+                user.active_organization, project, WebhookAction.TASKS_CREATED, all_created_task_ids
+            )
+
+            recalculate_stats_counts = {
+                'task_count': total_task_count,
+                'annotation_count': total_annotation_count,
+                'prediction_count': total_prediction_count,
+            }
+
+            all_tasks_queryset = Task.objects.filter(id__in=all_created_task_ids)
+            project.update_tasks_counters_and_task_states(
+                tasks_queryset=all_tasks_queryset,
+                maximum_annotations_changed=False,
+                overlap_cohort_percentage_changed=False,
+                tasks_number_changed=True,
+                recalculate_stats_counts=recalculate_stats_counts,
+            )
+            logger.info('Tasks bulk_update finished (async streaming import)')
+
+        duration = time.time() - start
+
+        project_import.task_count = total_task_count or 0
+        project_import.annotation_count = total_annotation_count or 0
+        project_import.prediction_count = total_prediction_count or 0
+        project_import.duration = duration
+        project_import.file_upload_ids = final_file_upload_ids
+        project_import.found_formats = final_found_formats
+        project_import.data_columns = final_data_columns
+        if project_import.return_task_ids:
+            project_import.task_ids = all_created_task_ids
+
+        project_import.status = ProjectImport.Status.COMPLETED
+        project_import.save()
+
+        logger.info(f'Streaming import {project_import.id} completed: {total_task_count} tasks imported')
+
+    except Exception as e:
+        logger.error(f'Error in streaming import {project_import.id}: {str(e)}', exc_info=True)
+        project_import.status = ProjectImport.Status.FAILED
+        project_import.traceback = traceback.format_exc()
+        project_import.error = str(e)
+        project_import.save()
         raise
 
 

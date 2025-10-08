@@ -144,7 +144,9 @@ const NodeViews: Record<string, NodeViewProps> = {
     icon: IconTimelineRegion,
   },
 
-  ...Object.fromEntries(Registry.customTags.map((tag) => [tag.region.name, tag.region.nodeView])),
+  ...Object.fromEntries(
+    Registry.customTags.filter((tag) => tag.region).map((tag) => [tag.region.name, tag.region.nodeView]),
+  ),
 };
 
 const NodeIcon: FC<any> = observer(({ node, ...props }) => {

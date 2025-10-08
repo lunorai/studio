@@ -68,6 +68,12 @@ Label Studio is available to everyone as open source software (Label Studio Comm
     <td style="text-align:center">✅</td>
     <td style="text-align:center">✅</td>
   </tr>
+    <tr>
+    <td><b>Advanced cloud storage integrations</b><br/><a href="storage.html">Databricks Unity Catalog, IAM for AWS S3, Azure Blob Storage with Service Principal, and WIF for Google Cloud Storage connections.</a></td>
+    <td style="text-align:center">❌</td>
+    <td style="text-align:center">❌</td>
+    <td style="text-align:center">✅</td>
+  </tr>
   <tr>
     <td><b>Import pre-annotated data</b><br/><a href="predictions.html">Import pre-annotated data (predictions) into Label Studio for further refinement and assessment.</a></td>
     <td style="text-align:center">✅</td>
@@ -84,6 +90,12 @@ Label Studio is available to everyone as open source software (Label Studio Comm
     <td><b>Sync data</b><br/><a href="storage.html">Synchronize new and labeled data between projects and your external data storage.</a></td>
     <td style="text-align:center">✅</td>
     <td style="text-align:center">✅</td>
+    <td style="text-align:center">✅</td>
+  </tr>
+  <tr>
+    <td><b>Chat</b><br/><a href="/tags/chat.html">Generate and label conversation data. Interact live with an LLM of your choice.</a></td>
+    <td style="text-align:center">❌</td>
+    <td style="text-align:center">Limited</td>
     <td style="text-align:center">✅</td>
   </tr>
   <tr>

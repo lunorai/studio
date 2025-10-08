@@ -249,9 +249,6 @@ describe("Sync: Audio Paragraphs", () => {
       });
     });
 
-    AudioView.pauseButton.click();
-    cy.wait(1000);
-
     // Check final sync
     cy.get('[data-testid="waveform-audio"]').then(([mainAudio]) => {
       cy.get(".lsf-paragraphs audio").then(([paragraphAudio]) => {

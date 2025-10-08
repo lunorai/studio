@@ -714,6 +714,9 @@ class ProjectActionsAPI(APIView):
                 },
             )
         },
+        extensions={
+            'x-fern-audiences': ['internal'],
+        },
     ),
 )
 class ProjectActionsFormAPI(APIView):

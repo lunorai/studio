@@ -51,6 +51,8 @@ _api_urlpatterns = [
     # Final submission tracking
     path('<int:pk>/final-submission/check/', FinalSubmissionCheckAPI.as_view(), name='final-submission-check'),
     path('<int:pk>/final-submission/', FinalSubmissionCreateAPI.as_view(), name='final-submission-create'),
+    # List all annotators for project
+    path('<int:pk>/annotators/', api.ProjectAnnotatorsAPI.as_view(), name='project-annotators'),
 ]
 
 _api_urlpatterns_templates = [

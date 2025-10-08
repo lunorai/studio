@@ -311,7 +311,7 @@ export const AudioModel = types.compose(
       },
 
       handleSyncPause() {
-        if (!self._ws?.playing) return;
+        if (self.isPlaying) return;
 
         self.isPlaying = false;
         self._ws?.pause();

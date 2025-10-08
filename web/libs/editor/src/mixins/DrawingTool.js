@@ -141,6 +141,9 @@ const DrawingTool = types
         self.annotation.setIsDrawing(true);
         self.annotation.regionStore.selection.drawingSelect(self.currentArea);
         self.listenForClose?.();
+        if (self.manager.findSelectedTool() !== self) {
+          self.manager.selectTool(self, true);
+        }
       },
       commitDrawingRegion() {
         const { currentArea, control, obj } = self;
@@ -152,7 +155,7 @@ const DrawingTool = types
             value[key] = source[key];
             return value;
           },
-          { coordstype: "px", dynamic: self.dynamic },
+          { coordstype: "px", dynamic: self.dynamic, converted: true },
         );
 
         const [main, ...rest] = currentArea.results;
@@ -205,7 +208,13 @@ const DrawingTool = types
       },
 
       canStartDrawing() {
-        return !self.isIncorrectControl() && !self.isIncorrectLabel() && self.canStart() && !self.annotation.isDrawing;
+        return (
+          !self.disabled &&
+          !self.isIncorrectControl() &&
+          !self.isIncorrectLabel() &&
+          self.canStart() &&
+          !self.annotation.isDrawing
+        );
       },
 
       startDrawing(x, y) {

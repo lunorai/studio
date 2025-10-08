@@ -1,5 +1,6 @@
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
+from core.permissions import all_permissions
 from core.utils.common import load_func
 from django.conf import settings
 from rest_flex_fields import FlexFieldsModelSerializer
@@ -99,6 +100,16 @@ class BaseUserSerializer(FlexFieldsModelSerializer):
 class BaseUserSerializerUpdate(BaseUserSerializer):
     class Meta(BaseUserSerializer.Meta):
         read_only_fields = ('email',)
+
+
+class BaseWhoAmIUserSerializer(BaseUserSerializer):
+    permissions = serializers.SerializerMethodField()
+
+    class Meta(BaseUserSerializer.Meta):
+        fields = BaseUserSerializer.Meta.fields + ('permissions',)
+
+    def get_permissions(self, user) -> list[str]:
+        return [perm for _, perm in all_permissions]
 
 
 class UserSimpleSerializer(BaseUserSerializer):

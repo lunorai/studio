@@ -34,7 +34,6 @@ import { ImageEntityMixin } from "./ImageEntityMixin";
 import { ImageSelection } from "./ImageSelection";
 import { RELATIVE_STAGE_HEIGHT, RELATIVE_STAGE_WIDTH, SNAP_TO_PIXEL_MODE } from "../../../components/ImageView/Image";
 import MultiItemObjectBase from "../MultiItemObjectBase";
-import { FF_BITMASK } from "@humansignal/core/lib/utils/feature-flags";
 
 const IMAGE_PRELOAD_COUNT = 3;
 const ZOOM_INTENSITY = 0.009;
@@ -691,6 +690,17 @@ const Model = types
 
           return skipInteractions || isPanning;
         },
+        get smoothingEnabled() {
+          const names = self.annotation?.names;
+
+          if (!names) return self.smoothing;
+
+          const hasBitmask = Array.from(names.values()).some(({ type }) => {
+            return type.includes("bitmask");
+          });
+          if (hasBitmask) return false;
+          return self.smoothing;
+        },
       },
       actions: {
         setSkipInteractions(value) {
@@ -979,12 +989,8 @@ const Model = types
       isEvent = false,
     ) {
       if (val) {
-        const zoomScale = ff.isActive(FF_BITMASK)
-          ? isEvent
-            ? self.getInertialZoom(val)
-            : val > 0
-              ? self.currentZoom * self.zoomBy
-              : self.currentZoom / self.zoomBy
+        const zoomScale = isEvent
+          ? self.getInertialZoom(val)
           : val > 0
             ? self.currentZoom * self.zoomBy
             : self.currentZoom / self.zoomBy;

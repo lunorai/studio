@@ -5,12 +5,12 @@ import {
   IconFolder,
   IconHome,
   IconHotkeys,
+  IconPeople,
   IconPersonInCircle,
   IconPin,
   IconTerminal,
   IconDoor,
   IconGithub,
-  IconSettings,
   IconSlack,
 } from "@humansignal/icons";
 import { LSLogo } from "../../assets/images";
@@ -192,7 +192,7 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
             content={
               <Menu>
                 <Menu.Item
-                  icon={<IconSettings />}
+                  icon={<IconPersonInCircle />}
                   label="Account &amp; Settings"
                   href={pages.AccountSettingsPage.path}
                 />
@@ -232,7 +232,7 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
               <Menu>
                 {isFF(FF_HOMEPAGE) && <Menu.Item label="Home" to="/" icon={<IconHome />} data-external exact />}
                 <Menu.Item label="Projects" to="/projects" icon={<IconFolder />} data-external exact />
-                <Menu.Item label="Organization" to="/organization" icon={<IconPersonInCircle />} data-external exact />
+                <Menu.Item label="Organization" to="/organization" icon={<IconPeople />} data-external exact />
 
                 <Menu.Spacer />
 

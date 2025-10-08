@@ -12,7 +12,7 @@ import { getDocsUrl } from "../../../utils/docs";
 
 // Local type definitions based on ViewControls and RegionStore
 type GroupingOptions = "manual" | "label" | "type";
-type OrderingOptions = "score" | "date";
+type OrderingOptions = "score" | "date" | "mediaStartTime";
 type Region = {
   id: string;
   [key: string]: any; // Allow other properties for flexibility

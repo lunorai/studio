@@ -130,3 +130,148 @@ export const normalizePoints = (points: PointInput[]): BezierPoint[] => {
     throw new Error(`Invalid point format at index ${index}`);
   });
 };
+
+/**
+ * Point-in-polygon test using ray casting algorithm with Bezier curve support
+ * @param point - The point to test
+ * @param polygon - Array of polygon vertices with potential Bezier curves
+ * @returns True if point is inside the polygon
+ */
+export const isPointInPolygon = (point: Point, polygon: BezierPoint[]): boolean => {
+  if (polygon.length < 3) return false;
+
+  let inside = false;
+  const x = point.x;
+  const y = point.y;
+
+  // Create a map for quick point lookup
+  const pointMap = new Map<string, BezierPoint>();
+  for (const vertex of polygon) {
+    pointMap.set(vertex.id, vertex);
+  }
+
+  // Check each edge of the polygon
+  for (let i = 0; i < polygon.length; i++) {
+    const currentPoint = polygon[i];
+    const prevPoint = currentPoint.prevPointId ? pointMap.get(currentPoint.prevPointId) : null;
+
+    if (!prevPoint) continue;
+
+    // Check if this edge intersects with the horizontal ray from the test point
+    const intersects = checkRayIntersectionWithEdge(point, prevPoint, currentPoint);
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+};
+
+/**
+ * Check if a horizontal ray from the test point intersects with a polygon edge
+ * Handles both straight lines and Bezier curves
+ */
+const checkRayIntersectionWithEdge = (testPoint: Point, startPoint: BezierPoint, endPoint: BezierPoint): boolean => {
+  const x = testPoint.x;
+  const y = testPoint.y;
+
+  // For straight line edges
+  if (!startPoint.isBezier && !endPoint.isBezier) {
+    return checkRayIntersectionWithLine(testPoint, startPoint, endPoint);
+  }
+
+  // For Bezier curve edges, we need to sample points along the curve
+  // and check intersections with line segments between sample points
+  const samples = 20; // Number of sample points along the curve
+  let lastPoint = startPoint;
+
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    const currentPoint = getBezierPointAtT(startPoint, endPoint, t);
+
+    // Check intersection with line segment from lastPoint to currentPoint
+    if (checkRayIntersectionWithLine(testPoint, lastPoint, currentPoint)) {
+      return true;
+    }
+
+    lastPoint = currentPoint;
+  }
+
+  return false;
+};
+
+/**
+ * Check if a horizontal ray from the test point intersects with a straight line segment
+ */
+const checkRayIntersectionWithLine = (testPoint: Point, startPoint: Point, endPoint: Point): boolean => {
+  const x = testPoint.x;
+  const y = testPoint.y;
+  const x1 = startPoint.x;
+  const y1 = startPoint.y;
+  const x2 = endPoint.x;
+  const y2 = endPoint.y;
+
+  // Ensure y1 <= y2 for consistent intersection checking
+  if (y1 > y2) {
+    return checkRayIntersectionWithLine(testPoint, endPoint, startPoint);
+  }
+
+  // Ray doesn't intersect if:
+  // 1. The test point's y is not between the line segment's y values
+  // 2. The line segment is horizontal (y1 === y2)
+  if (y < y1 || y > y2 || y1 === y2) {
+    return false;
+  }
+
+  // Calculate the x-coordinate where the horizontal ray intersects the line
+  const intersectionX = x1 + ((y - y1) * (x2 - x1)) / (y2 - y1);
+
+  // The ray intersects if the intersection point is to the right of the test point
+  return intersectionX > x;
+};
+
+/**
+ * Get a point on a Bezier curve at parameter t
+ * Handles different Bezier configurations
+ */
+const getBezierPointAtT = (startPoint: BezierPoint, endPoint: BezierPoint, t: number): Point => {
+  // Determine control points based on Bezier configuration
+  let cp1: Point;
+  let cp2: Point;
+
+  if (startPoint.isBezier && startPoint.controlPoint2 && endPoint.isBezier && endPoint.controlPoint1) {
+    // Full Bezier curve - both points have control points
+    cp1 = startPoint.controlPoint2;
+    cp2 = endPoint.controlPoint1;
+  } else if (startPoint.isBezier && startPoint.controlPoint2) {
+    // Partial Bezier curve - only startPoint has controlPoint2
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    cp1 = startPoint.controlPoint2;
+    cp2 = { x: endPoint.x - dx * 0.3, y: endPoint.y - dy * 0.3 };
+  } else if (endPoint.isBezier && endPoint.controlPoint1) {
+    // Partial Bezier curve - only endPoint has controlPoint1
+    const dx = endPoint.x - startPoint.x;
+    const dy = endPoint.y - startPoint.y;
+    cp1 = { x: startPoint.x + dx * 0.3, y: startPoint.y + dy * 0.3 };
+    cp2 = endPoint.controlPoint1;
+  } else {
+    // No Bezier curve, return interpolated point on straight line
+    return {
+      x: startPoint.x + t * (endPoint.x - startPoint.x),
+      y: startPoint.y + t * (endPoint.y - startPoint.y),
+    };
+  }
+
+  // Calculate Bezier curve point using cubic Bezier formula
+  const u = 1 - t;
+  const tt = t * t;
+  const uu = u * u;
+  const uuu = uu * u;
+  const ttt = tt * t;
+
+  return {
+    x: uuu * startPoint.x + 3 * uu * t * cp1.x + 3 * u * tt * cp2.x + ttt * endPoint.x,
+    y: uuu * startPoint.y + 3 * uu * t * cp1.y + 3 * u * tt * cp2.y + ttt * endPoint.y,
+  };
+};

@@ -6,10 +6,14 @@ interface ObjectTag {
 
 interface CustomTag<ViewTag = unknown> {
   tag: string;
+  isObject?: boolean;
   model: ObjectTag;
+  description?: string;
   view: React.ComponentType<ViewTag>;
   detector?: (value: object) => boolean;
-  region: {
+  resultName?: string;
+  result?: any;
+  region?: {
     name: string;
     nodeView: {
       name: string;
@@ -33,6 +37,7 @@ class _Registry {
   // list of available areas per object type
   areas = new Map();
 
+  // Map of models to views (ImageModel => HtxImage)
   views_models: Record<string, any> = {};
 
   tools: Record<string, any> = {};
@@ -137,8 +142,12 @@ class _Registry {
 
   addCustomTag<ViewTag = unknown>(tag: string, definition: CustomTag<ViewTag>) {
     this.addTag(tag.toLowerCase(), definition.model, definition.view);
-    this.addObjectType(definition.model);
-    this.addRegionType(definition.region, definition.model.name, definition.detector);
+    if (definition.isObject) {
+      this.addObjectType(definition.model);
+    }
+    if (definition.region) {
+      this.addRegionType(definition.region, definition.model.name, definition.detector);
+    }
     this.customTags.push(definition);
   }
 }

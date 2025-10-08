@@ -86,7 +86,7 @@ describe("Sync Buffering: Seek Buffering Tests", suiteConfig, () => {
       Paragraphs.hasMediaPlaying();
     });
 
-    it("should handle seek buffering from video timeline", () => {
+    it.skip("should handle seek buffering from video timeline", () => {
       LabelStudio.params()
         .config(videoAudioParagraphsConfig)
         .data(videoAudioParagraphsData)

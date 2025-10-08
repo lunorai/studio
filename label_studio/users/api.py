@@ -275,7 +275,7 @@ class UserAPI(viewsets.ModelViewSet):
 class UserResetTokenAPI(APIView):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     queryset = User.objects.all()
-    permission_classes = (IsAuthenticated,)
+    permission_required = all_permissions.users_token_any
 
     def post(self, request, *args, **kwargs):
         user = request.user
@@ -309,7 +309,7 @@ class UserResetTokenAPI(APIView):
 )
 class UserGetTokenAPI(APIView):
     parser_classes = (JSONParser,)
-    permission_classes = (IsAuthenticated,)
+    permission_required = all_permissions.users_token_any
 
     def get(self, request, *args, **kwargs):
         user = request.user

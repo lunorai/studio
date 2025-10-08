@@ -415,7 +415,48 @@ class ImportAPI(generics.CreateAPIView):
 
 
 # Import
-@extend_schema(exclude=True)
+@method_decorator(
+    name='post',
+    decorator=extend_schema(
+        tags=['Import'],
+        summary='Import predictions',
+        description='Import model predictions for tasks in the specified project.',
+        parameters=[
+            OpenApiParameter(
+                name='id',
+                type=OpenApiTypes.INT,
+                location='path',
+                description='A unique integer value identifying this project.',
+            ),
+        ],
+        request=PredictionSerializer(many=True),
+        responses={
+            201: OpenApiResponse(
+                description='Predictions successfully imported',
+                response={
+                    'title': 'Predictions import response',
+                    'description': 'Import result',
+                    'type': 'object',
+                    'properties': {
+                        'created': {
+                            'title': 'created',
+                            'description': 'Number of predictions created',
+                            'type': 'integer',
+                        }
+                    },
+                },
+            ),
+            400: OpenApiResponse(
+                description='Bad Request',
+            ),
+        },
+        extensions={
+            'x-fern-sdk-group-name': 'projects',
+            'x-fern-sdk-method-name': 'import_predictions',
+            'x-fern-audiences': ['public'],
+        },
+    ),
+)
 class ImportPredictionsAPI(generics.CreateAPIView):
     """
     API for importing predictions to a project.

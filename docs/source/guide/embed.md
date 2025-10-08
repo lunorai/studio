@@ -1,6 +1,6 @@
 ---
 title: Embed Label Studio - Beta 🧪
-short: Embed Label Studio 
+short: Embed Label Studio 🧪
 type: guide
 tier: enterprise
 order: 409
@@ -18,7 +18,7 @@ Label Studio Embeds allow you to seamlessly integrate annotation and review func
 Before you begin, ensure you have:
 * Label Studio:
     * You must have the Owner role in Label Studio.
-    * From **Organization > Access Token Settings**, ensure that at least one option is enabled.
+    * From **Organization > Settings > Access Token Settings**, ensure that at least one option is enabled.
 
 
 * Your external application:
@@ -75,7 +75,7 @@ JWT claims required:
 **Notes:**
 
 * You can find your organization ID from the **Organization** page in Label Studio.   
-* The example below uses RS256 as a verification algorithm, but you can find a full list of supported algorithms from **Organization > Usage & Billing > Embedding**.   
+* The example below uses RS256 as a verification algorithm, but you can find a full list of supported algorithms from **Organization > Usage & License > Embedding**.   
 * The public key must be stored in Label Studio in base64-url encoded format.
 
 ![Screenshot of org id](/images/org-id.png)
@@ -102,7 +102,7 @@ console.log(token);
 
 ## Configure embedding in Label Studio
 
-From Label Studio, go to **Organization > Usage & Billing > Embedding** and complete the following fields:
+From Label Studio, go to **Organization > Usage & License > Embedding** and complete the following fields:
 
 | Field | Description  |
 | :---- | :---- |

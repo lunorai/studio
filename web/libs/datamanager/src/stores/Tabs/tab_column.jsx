@@ -28,6 +28,7 @@ export const ViewColumnType = types.enumeration([
   "HyperText",
   "TimeSeries",
   "Unknown",
+  "AgreementSelected",
 ]);
 
 const typeShortMap = {

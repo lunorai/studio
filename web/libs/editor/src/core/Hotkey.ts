@@ -348,6 +348,10 @@ export const Hotkey = (namespace = "global", description = "Hotkeys") => {
 
       const hotkey = Hotkey.keymap[name as keyof Keymap];
 
+      if (!isDefined(hotkey)) {
+        return false;
+      }
+
       const shortcut = isMacOS() ? (hotkey.mac ?? hotkey.key) : hotkey.key;
 
       return this.hasKey(shortcut);

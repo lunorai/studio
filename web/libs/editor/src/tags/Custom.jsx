@@ -4,6 +4,7 @@ import React from "react";
 
 import { destroy, types, getRoot } from "mobx-state-tree";
 import { observer } from "mobx-react";
+import { EnterpriseBadge } from "@humansignal/ui";
 import Registry from "../core/Registry";
 import ControlBase from "./control/Base";
 import ClassificationBase from "./control/ClassificationBase";
@@ -12,8 +13,6 @@ import { AnnotationMixin } from "../mixins/AnnotationMixin";
 import { CustomRegionModel } from "../regions/CustomRegion";
 import { errorBuilder } from "../core/DataValidator/ConfigValidator";
 import { parseValue, tryToParseJSON } from "../utils/data";
-import { POC_UI } from "./CustomCompiledCode";
-import { ManagementUI } from "./CustomManagement";
 // import * as Babel from '@babel/standalone';
 
 // Define the model for the custom tag
@@ -792,7 +791,14 @@ function({ React, data, item, annotation, store, getValue, setValue, getTagValue
         props: item.parsedProps,
       };
 
-      const transformedCode = POC_UI; // MANAGEMENT_V2;
+      function decodeHtmlEntities(text) {
+        const textArea = document.createElement("textarea");
+        textArea.innerHTML = text;
+        return textArea.value;
+      }
+
+      const transformedCode = decodeHtmlEntities(item.effectiveCode);
+      // const transformedCode = POC_UI;
 
       const UserComponent = () => {
         const code = `
@@ -1053,7 +1059,7 @@ function({ React, data, item, annotation, store, getValue, setValue, getTagValue
   return (
     <div className={`custom-tag-wrapper ${item.classname}`} style={wrapperStyle}>
       {item.css && <style dangerouslySetInnerHTML={{ __html: item.css }} />}
-      <ManagementUI {...context} />
+      {/* <ManagementUI {...context} /> */}
       {/* <POCUI {...context} /> */}
       <hr />
       {item.errorBoundary ? (
@@ -1067,8 +1073,20 @@ function({ React, data, item, annotation, store, getValue, setValue, getTagValue
   );
 });
 
-// Register the custom tag
-Registry.addTag("custominterface", CustomInterfaceModel, CustomInterfaceComponent);
-Registry.addObjectType(CustomInterfaceModel);
+const CustomComponentWrapper = observer(({ item }) => {
+  if (!APP_SETTINGS?.billing?.enterprise) {
+    return (
+      <div className="flex items-center gap-2">
+        <EnterpriseBadge />
+        CustomInterface tag is only available in the enterprise.
+      </div>
+    );
+  }
+  return <CustomInterfaceComponent item={item} />;
+});
 
-export { CustomInterfaceModel, CustomInterfaceComponent };
+// Register the custom tag
+// Registry.addTag("custominterface", CustomInterfaceModel, CustomComponentWrapper);
+// Registry.addObjectType(CustomInterfaceModel);
+
+export { CustomInterfaceModel, CustomComponentWrapper as CustomInterfaceComponent };

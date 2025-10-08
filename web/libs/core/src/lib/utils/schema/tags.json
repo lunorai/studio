@@ -195,6 +195,54 @@
       }
     }
   },
+  "Chat": {
+    "name": "Chat",
+    "description": "The `Chat` tag displays a conversational transcript and lets annotators\nextend it with new messages during labeling. The initial transcript is\nprovided from task data via the `value` attribute.\n\nOptionally, the tag can request automatic replies from an LLM model. To do so,\nset the `llm` attribute to a model in the format `<provider>/<model>`.\n\nMessages can be edited by clicking the edit button that appears on hover for\nuser-created messages (messages from annotation results). System messages from\ntask data cannot be edited.\n\nUse with the following data types: JSON array of message objects.\n\nMessage object format (task data):\n- `role`    — speaker identifier; supported roles: `user`, `assistant`, `system`, `tool`, `developer`\n- `content` — message text\n\nExample task data:\n```json\n{\n  \"dialog\": [\n    {\"role\": \"system\", \"content\": \"Welcome to the assistant.\"},\n    {\"role\": \"user\", \"content\": \"Hello!\"}\n  ]\n}\n```",
+    "attrs": {
+      "name": {
+        "name": "name",
+        "description": "Name of the element",
+        "type": "string",
+        "required": true
+      },
+      "value": {
+        "name": "value",
+        "description": "Data field containing an array of chat messages or empty array",
+        "type": "string",
+        "required": true
+      },
+      "messageroles": {
+        "name": "messageroles",
+        "description": "Comma-separated list of roles that the user can create and send messages on behalf of. Default is \"user\" if the `llm` parameter is set; default is \"user,assistant\" if not.",
+        "type": "string",
+        "required": false
+      },
+      "editable": {
+        "name": "editable",
+        "description": "Whether messages are editable. Use true/false, or a comma-separated list of roles that are editable",
+        "type": ["true", "false"],
+        "required": false
+      },
+      "minmessages": {
+        "name": "minmessages",
+        "description": "Minimum total number of messages required to submit",
+        "type": ["string", "number"],
+        "required": false
+      },
+      "maxmessages": {
+        "name": "maxmessages",
+        "description": "Maximum total number of messages allowed",
+        "type": ["string", "number"],
+        "required": false
+      },
+      "llm": {
+        "name": "llm",
+        "description": "Model used to enable automatic assistant replies, format: `<provider>/<model>`",
+        "type": "string",
+        "required": false
+      }
+    }
+  },
   "HyperText": {
     "name": "HyperText",
     "description": "The `HyperText` tag displays hypertext markup for labeling. Use for labeling HTML-encoded text and webpages for NER and NLP projects.\n\nUse with the following data types: HTML.",
@@ -785,6 +833,20 @@
         "type": "number",
         "required": false,
         "default": 64
+      },
+      "defaultPlaybackSpeed": {
+        "name": "defaultPlaybackSpeed",
+        "description": "default playback speed the player should start with when loaded",
+        "type": "number",
+        "required": false,
+        "default": 1
+      },
+      "minPlaybackSpeed": {
+        "name": "minPlaybackSpeed",
+        "description": "minimum allowed playback speed; defaultPlaybackSpeed cannot be set below this value",
+        "type": "number",
+        "required": false,
+        "default": 1
       }
     }
   },
@@ -2318,19 +2380,19 @@
       },
       "maxWidth": {
         "name": "maxWidth",
-        "description": "Maximum width for dropdown",
+        "description": "Maximum width for dropdown with units (eg: \"500px\")",
         "type": "number",
         "required": false
       },
       "minWidth": {
         "name": "minWidth",
-        "description": "Minimum width for dropdown",
+        "description": "Minimum width for dropdown with units (eg: \"300px\")",
         "type": "number",
         "required": false
       },
       "required": {
         "name": "required",
-        "description": "Whether taxonomy validation is required",
+        "description": "Whether it is required to have selected at least one option",
         "type": ["true", "false"],
         "required": false,
         "default": false
@@ -2701,7 +2763,7 @@
   },
   "VectorLabels": {
     "name": "VectorLabels",
-    "description": "The `VectorLabels` tag is used to create labeled vectors. Use to apply labels to vectors in semantic segmentation tasks.\n\nUse with the following data types: image.",
+    "description": "The `VectorLabels` tag is used to create labeled vectors. Use to apply labels to vectors in semantic segmentation tasks.\n\nUse with the following data types: image.\n\n## Key Features\n\n### Point Management\n- **Add Points**: Click on empty space, Shift+click on path segments\n- **Edit Points**: Drag to reposition, Shift+click to convert regular ↔ bezier\n- **Delete Points**: Alt+click on existing points\n- **Multi-Selection**: Select multiple points for batch transformations\n- **Break Closed Path**: Alt+click on any segment of a closed path to break it at that specific segment\n\n### Bezier Curves\n- **Create**: Drag while adding points or convert existing points\n- **Edit**: Drag control points, disconnect/reconnect control handles\n- **Control**: `curves` prop to enable/disable bezier functionality\n\n## Keyboard Shortcuts & Hotkeys\n\n### Point Creation & Editing\n- **Click**: Add new point in drawing mode\n- **Shift + Click** on a segment: Add point on path segment (insert between existing points)\n- **Shift + Drag**: Create bezier point with control handles\n- **Shift + Click** on a point: Convert point between regular ↔ bezier\n- **Alt + Click** on a segment: Break closed path at segment (when path is closed)\n\n### Point Selection\n- **Click**: Select single point\n- **Cmd/Ctrl + Click**: Add point to multi-selection\n- **Cmd/Ctrl + Click on shape**: Select all points in the path\n- **Cmd/Ctrl + Click on point**: Toggle point selection in multi-selection\n\n### Path Management\n- **Click on first/last point**: Close path bidirectionally (first→last or last→first)\n- **Shift + Click**: Add point on path segment without closing\n\n### Bezier Curve Control\n- **Drag control points**: Adjust curve shape\n- **Alt + Drag control point**: Disconnect control handles (make asymmetric)\n- **Shift + Drag**: Create new bezier point with control handles\n\n### Multi-Selection & Transformation\n- **Select multiple points**: Use Cmd/Ctrl + Click to build selection\n- **Transform selection**: Use transformer handles for rotation, scaling, and translation\n- **Clear selection**: Click on any point\n\n## Usage Examples\n\n### Basic Vector Path\n```jsx\n<View>\n  <Image name=\"image\" value=\"$image\" />\n  <VectorLabels name=\"labels\" toName=\"image\">\n    <Label value=\"Road\" />\n    <Label value=\"Boundary\" />\n  </VectorLabels>\n</View>\n```\n\n### Polygon with Bezier Support\n```jsx\n<View>\n  <Image name=\"image\" value=\"$image\" />\n  <VectorLabels\n    name=\"polygons\"\n    toName=\"image\"\n    closable={true}\n    curves={true}\n    minPoints=\"3\"\n    maxPoints=\"20\"\n  >\n    <Label value=\"Building\" />\n    <Label value=\"Park\" />\n  </VectorLabels>\n</View>\n```\n\n### Skeleton Mode for Branching Paths\n```jsx\n<View>\n  <Image name=\"image\" value=\"$image\" />\n  <VectorLabels\n    name=\"skeleton\"\n    toName=\"image\"\n    skeleton={true}\n    closable={false}\n    curves={true}\n  >\n    <Label value=\"Tree\" />\n    <Label value=\"Branch\" />\n  </VectorLabels>\n</View>\n```\n\n### Keypoint Annotation Tool\n```jsx\n<View>\n  <Image name=\"image\" value=\"$image\" />\n  <VectorLabels\n    name=\"keypoints\"\n    toName=\"image\"\n    closable={false}\n    curves={false}\n    minPoints=\"1\"\n    maxPoints=\"1\"\n  >\n    <Label value=\"Eye\" />\n    <Label value=\"Nose\" />\n    <Label value=\"Mouth\" />\n  </VectorLabels>\n</View>\n```\n\n### Constrained Drawing\n```jsx\n<View>\n  <Image name=\"image\" value=\"$image\" />\n  <VectorLabels\n    name=\"constrained\"\n    toName=\"image\"\n    closable={true}\n    curves={true}\n    constraintoBounds={true}\n    snap=\"pixel\"\n    minPoints=\"4\"\n    maxPoints=\"12\"\n  >\n    <Label value=\"Region\" />\n  </VectorLabels>\n</View>\n```\n\n## Advanced Features\n\n### Path Breaking\nWhen a path is closed, you can break it at any segment:\n- **Alt + Click** on any segment of a closed path\n- The path breaks at that segment\n- The breaking point becomes the first element\n- The point before breaking becomes active\n\n### Skeleton Mode\n- **Purpose**: Create branching paths instead of linear sequences\n- **Behavior**: New points connect to the active point, not the last added point\n- **Use Case**: Tree structures, network diagrams, anatomical features\n\n### Bezier Curve Management\n- **Symmetric Control**: By default, control points move symmetrically\n- **Asymmetric Control**: Hold Alt while dragging to disconnect handles\n- **Control Point Visibility**: Control points are shown when editing bezier points\n\n### Multi-Selection Workflow\n1. **Build Selection**: Use Cmd/Ctrl + Click to add points\n2. **Transform**: Use transformer handles for rotation, scaling, translation\n3. **Batch Operations**: Apply transformations to all selected points\n4. **Clear**: Click outside or use programmatic methods\n\n## Props Reference",
     "attrs": {
       "name": {
         "name": "name",
@@ -2781,6 +2843,62 @@
         "type": ["pixel", "none"],
         "required": false,
         "default": "none"
+      },
+      "closable": {
+        "name": "closable",
+        "description": "Allow closed shapes",
+        "type": ["true", "false"],
+        "required": false,
+        "default": false
+      },
+      "curves": {
+        "name": "curves",
+        "description": "Allow Bezier curves",
+        "type": ["true", "false"],
+        "required": false,
+        "default": false
+      },
+      "skeleton": {
+        "name": "skeleton",
+        "description": "Enables skeleton mode to allow branch paths",
+        "type": ["true", "false"],
+        "required": false,
+        "default": false
+      },
+      "minPoints": {
+        "name": "minPoints",
+        "description": "Minimum allowed number of points",
+        "type": ["number", "none"],
+        "required": false,
+        "default": "none"
+      },
+      "maxPoints": {
+        "name": "maxPoints",
+        "description": "Maximum allowed number of points",
+        "type": ["number", "none"],
+        "required": false,
+        "default": "none"
+      },
+      "constrainToBounds": {
+        "name": "constrainToBounds",
+        "description": "Whether to keep shapes inside image bounds",
+        "type": ["true", "false"],
+        "required": false,
+        "default": false
+      },
+      "pointsizeenabled": {
+        "name": "pointsizeenabled",
+        "description": "Size of a point in pixels when shape is selected",
+        "type": "number",
+        "required": false,
+        "default": 5
+      },
+      "pointsizedisabled": {
+        "name": "pointsizedisabled",
+        "description": "Size of a point in pixels when shape is not selected",
+        "type": "number",
+        "required": false,
+        "default": 5
       }
     }
   },
@@ -2893,6 +3011,60 @@
       }
     }
   },
+  "Markdown": {
+    "name": "Markdown",
+    "description": "The `Markdown` element is used to display markdown-formatted text content.",
+    "attrs": {
+      "value": {
+        "name": "value",
+        "description": "Markdown text content, either static text or field name in task data (e.g., $markdown_field)",
+        "type": "string",
+        "required": true
+      },
+      "style": {
+        "name": "style",
+        "description": "CSS style string",
+        "type": "string",
+        "required": false
+      },
+      "className": {
+        "name": "className",
+        "description": "Class name of the CSS style to apply",
+        "type": "string",
+        "required": false
+      },
+      "idAttr": {
+        "name": "idAttr",
+        "description": "Unique ID attribute to use in CSS",
+        "type": "string",
+        "required": false
+      },
+      "visibleWhen": {
+        "name": "visibleWhen",
+        "description": "Control visibility of the content",
+        "type": ["region-selected", "choice-selected", "no-region-selected", "choice-unselected"],
+        "required": false
+      },
+      "whenTagName": {
+        "name": "whenTagName",
+        "description": "Use with `visibleWhen`. Narrow down visibility by tag name",
+        "type": "string",
+        "required": false
+      },
+      "whenLabelValue": {
+        "name": "whenLabelValue",
+        "description": "Use with `visibleWhen=\"region-selected\"`. Narrow down visibility by label value",
+        "type": "string",
+        "required": false
+      },
+      "whenChoiceValue": {
+        "name": "whenChoiceValue",
+        "description": "Use with `visibleWhen` and `whenTagName`. Narrow down visibility by choice value",
+        "type": "string",
+        "required": false
+      }
+    }
+  },
   "Style": {
     "name": "Style",
     "description": "The `Style` tag is used in combination with the View tag to apply custom CSS properties to the labeling interface. See the [CSS Reference](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference) on the MDN page for a full list of available properties that you can reference. You can also adjust default Label Studio CSS classes. Use the browser developer tools to inspect the element on the UI and locate the class name, then specify that class name in the `Style` tag.",
@@ -2966,6 +3138,7 @@
     "children": [
       "Audio",
       "Channel",
+      "Chat",
       "HyperText",
       "Image",
       "List",
@@ -3013,6 +3186,7 @@
       "Collapse",
       "Filter",
       "Header",
+      "Markdown",
       "Style",
       "View"
     ]

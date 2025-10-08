@@ -1,5 +1,5 @@
 import { observer } from "mobx-react";
-import { BemWithSpecifiContext } from "../../../utils/bem";
+import { cn } from "../../../utils/bem";
 import { Button } from "@humansignal/ui";
 import { IconClose } from "@humansignal/icons";
 import { Tag } from "../../Common/Tag/Tag";
@@ -7,8 +7,6 @@ import { FilterDropdown } from "../FilterDropdown";
 import "./FilterLine.scss";
 import { FilterOperation } from "./FilterOperation";
 import { Icon } from "../../Common/Icon/Icon";
-
-const { Block, Elem } = BemWithSpecifiContext();
 
 const Conjunction = observer(({ index, view }) => {
   return (
@@ -31,17 +29,17 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
   if (sidebar) {
     // Sidebar layout uses grid structure like main layout
     return (
-      <Block name="filterLine" mod={{ hasChild: !!childFilter }}>
+      <div className={cn("filterLine").mod({ hasChild: !!childFilter })}>
         {/* Main filter row */}
-        <Elem name="column" mix="conjunction">
+        <div className={cn("filterLine").elem("column").mix("conjunction")}>
           {index === 0 ? (
             <span style={{ fontSize: 12, paddingRight: 5 }}>Where</span>
           ) : (
             <Conjunction index={index} view={view} />
           )}
-        </Elem>
+        </div>
 
-        <Elem name="column" mix="field">
+        <div className={cn("filterLine").elem("column").mix("field")}>
           <FilterDropdown
             placeholder="Column"
             defaultValue={filter.filter.id}
@@ -55,18 +53,18 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
             }}
             onChange={(value) => filter.setFilterDelayed(value)}
             optionRender={({ item: { original: filter } }) => (
-              <Elem name="selector">
+              <div className={cn("filterLine").elem("selector")}>
                 {filter.field.title}
                 {filter.field.parent && (
                   <Tag size="small" className="filters-data-tag" color="#1d91e4" style={{ marginLeft: 7 }}>
                     {filter.field.parent.title}
                   </Tag>
                 )}
-              </Elem>
+              </div>
             )}
             disabled={filter.field.disabled}
           />
-        </Elem>
+        </div>
 
         <FilterOperation
           filter={filter}
@@ -78,7 +76,7 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
 
         {/* Column 5: Remove button - only show if no child filter, otherwise empty space */}
         {!childFilter ? (
-          <Elem name="remove">
+          <div className={cn("filterLine").elem("remove")}>
             <Button
               look="danger"
               size="smaller"
@@ -88,21 +86,21 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
               }}
               icon={<Icon icon={IconClose} size={12} />}
             />
-          </Elem>
+          </div>
         ) : (
-          <Elem name="remove" />
+          <div className={cn("filterLine").elem("remove")} />
         )}
 
         {/* Child filter row */}
         {childFilter && (
           <>
             {/* Column 1: Conjunction */}
-            <Elem name="column" mix="conjunction">
+            <div className={cn("filterLine").elem("column").mix("conjunction")}>
               <span style={{ fontSize: 12, paddingRight: 5 }}>and</span>
-            </Elem>
+            </div>
 
             {/* Column 2: Field */}
-            <Elem name="column" mix="field child-field">
+            <div className={cn("filterLine").elem("column").mix("field child-field")}>
               <FilterDropdown
                 placeholder={childFilter.field.title}
                 value={childFilter.field.title}
@@ -111,7 +109,7 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
                 onChange={() => {}} // No-op since it's disabled
                 style={{ minWidth: "80px" }}
               />
-            </Elem>
+            </div>
 
             {/* Column 3 & 4: Operation and Value */}
             <FilterOperation
@@ -123,7 +121,7 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
             />
 
             {/* Column 5: Remove */}
-            <Elem name="remove">
+            <div className={cn("filterLine").elem("remove")}>
               <Button
                 look="danger"
                 size="smaller"
@@ -133,25 +131,25 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
                 }}
                 icon={<Icon icon={IconClose} size={12} />}
               />
-            </Elem>
+            </div>
           </>
         )}
-      </Block>
+      </div>
     );
   }
 
   // Main layout uses parent grid structure - render children as direct grid items
   return (
-    <Block name="filterLine" mod={{ hasChild: !!childFilter }}>
-      <Elem name="column" mix="conjunction">
+    <div className={cn("filterLine").mod({ hasChild: !!childFilter })}>
+      <div className={cn("filterLine").elem("column").mix("conjunction")}>
         {index === 0 ? (
           <span style={{ fontSize: 12, paddingRight: 5 }}>Where</span>
         ) : (
           <Conjunction index={index} view={view} />
         )}
-      </Elem>
+      </div>
 
-      <Elem name="column" mix="field">
+      <div className={cn("filterLine").elem("column").mix("field")}>
         <FilterDropdown
           placeholder="Column"
           defaultValue={filter.filter.id}
@@ -167,18 +165,18 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
           }}
           onChange={(value) => filter.setFilterDelayed(value)}
           optionRender={({ item: { original: filter } }) => (
-            <Elem name="selector">
+            <div className={cn("filterLine").elem("selector")}>
               {filter.field.title}
               {filter.field.parent && (
                 <Tag size="small" className="filters-data-tag" color="#1d91e4" style={{ marginLeft: 7 }}>
                   {filter.field.parent.title}
                 </Tag>
               )}
-            </Elem>
+            </div>
           )}
           disabled={filter.field.disabled}
         />
-      </Elem>
+      </div>
 
       <FilterOperation
         filter={filter}
@@ -190,7 +188,7 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
 
       {/* Only show remove button if there's no child filter, or show it on the last column of the main filter */}
       {!childFilter && (
-        <Elem name="remove">
+        <div className={cn("filterLine").elem("remove")}>
           <Button
             look="string"
             size="small"
@@ -201,20 +199,20 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
             }}
             icon={<Icon icon={IconClose} size={12} />}
           />
-        </Elem>
+        </div>
       )}
 
       {/* Render child filters as additional grid items on new row */}
       {childFilter && (
         <>
           {/* Empty column to maintain grid alignment for main filter row */}
-          <Elem name="remove" />
+          <div className={cn("filterLine").elem("remove")} />
 
-          <Elem name="column" mix="conjunction">
+          <div className={cn("filterLine").elem("column").mix("conjunction")}>
             <span style={{ fontSize: 12, paddingRight: 5 }}>and</span>
-          </Elem>
+          </div>
 
-          <Elem name="column" mix="field child-field">
+          <div className={cn("filterLine").elem("column").mix("field child-field")}>
             <FilterDropdown
               placeholder={childFilter.field.title}
               value={childFilter.field.title}
@@ -222,7 +220,7 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
               disabled={true}
               onChange={() => {}} // No-op since it's disabled
             />
-          </Elem>
+          </div>
 
           <FilterOperation
             filter={childFilter}
@@ -233,7 +231,7 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
           />
 
           {/* Show remove button on child filter row - removes the entire filter group */}
-          <Elem name="remove">
+          <div className={cn("filterLine").elem("remove")}>
             <Button
               look="string"
               size="small"
@@ -244,9 +242,9 @@ export const FilterLine = observer(({ filter, availableFilters, index, view, sid
               }}
               icon={<Icon icon={IconClose} size={12} />}
             />
-          </Elem>
+          </div>
         </>
       )}
-    </Block>
+    </div>
   );
 });

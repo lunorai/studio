@@ -52,7 +52,9 @@ const Area = types.union(
       if (sn.$treenode) return sn.$treenode.type;
 
       for (const customTag of Registry.customTags) {
-        if (sn.value?.[customTag.resultName] || sn[customTag.resultName]) return customTag.region;
+        if (customTag.region && customTag.detector) {
+          if (customTag.detector(sn)) return customTag.region;
+        }
       }
 
       if (
@@ -99,7 +101,7 @@ const Area = types.union(
   VideoRectangleRegionModel,
   ClassificationArea,
   CustomRegionModel,
-  ...Registry.customTags.map((t) => t.region),
+  ...Registry.customTags.map((t) => t.region).filter(Boolean),
 );
 
 export default Area;

@@ -1,6 +1,5 @@
 import {
   createClickHandler,
-  createDblClickHandler,
   createMouseDownHandler,
   createMouseMoveHandler,
   createMouseUpHandler,
@@ -16,7 +15,6 @@ export function createEventHandlers(props: EventHandlerProps): EventHandlers {
     handleLayerClick: createClickHandler(props, handledSelectionInMouseDown),
     handleLayerMouseMove: createMouseMoveHandler(props, handledSelectionInMouseDown),
     handleLayerMouseUp: createMouseUpHandler(props),
-    handleLayerDblClick: createDblClickHandler(props),
   };
 }
 

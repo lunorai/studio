@@ -101,7 +101,9 @@ export const RegionDetailsMain: FC<{ region: any }> = observer(({ region }) => {
           .map((res) => (
             <ResultItem key={res.pid} result={res} />
           ))}
-        {region?.text ? (
+        {/* @todo dirty hack to not duplicate text for OCR regions */}
+        {/* @todo should be converted into universal solution */}
+        {region?.text && !region?.ocrtext ? (
           <Block name="region-meta">
             <Elem name="item">
               <Elem name="content" mod={{ type: "text" }}>

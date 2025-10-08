@@ -96,14 +96,21 @@ const Result = types
     to_name: types.late(() => types.reference(types.union(...Registry.objectTypes()))),
     // @todo some general type, maybe just a `string`
     type: ff.isActive(ff.FF_CUSTOM_TAGS)
-      ? types.late(() => types.enumeration([...resultTypes, ...Registry.customTags.map((t) => t.resultName)]))
+      ? types.late(() =>
+          types.enumeration([
+            ...resultTypes,
+            ...Registry.customTags.filter((t) => t.resultName).map((t) => t.resultName),
+          ]),
+        )
       : types.enumeration([...resultTypes]),
     // @todo much better to have just a value, not a hash with empty fields
     value: ff.isActive(ff.FF_CUSTOM_TAGS)
       ? types.late(() =>
           types.model({
             ...resultValues,
-            ...Object.fromEntries(Registry.customTags.map((t) => [t.resultName, types.maybe(t.result)])),
+            ...Object.fromEntries(
+              Registry.customTags.filter((t) => t.resultName).map((t) => [t.resultName, types.maybe(t.result)]),
+            ),
           }),
         )
       : types.model({

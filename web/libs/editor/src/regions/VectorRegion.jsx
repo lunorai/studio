@@ -13,7 +13,8 @@ import { KonvaVector } from "../components/KonvaVector/KonvaVector";
 import { observer } from "mobx-react";
 import Constants from "../core/Constants";
 import { RegionWrapper } from "./RegionWrapper";
-import { LabelOnRect } from "../components/ImageView/LabelOnRegion";
+import { LabelOnPolygon } from "../components/ImageView/LabelOnRegion";
+import { Group } from "react-konva";
 
 /**
  * VectorRegion - Vector graphics region with coordinate system conversion
@@ -65,6 +66,7 @@ const Model = types
     supportsScale: true,
     isDrawing: false,
     vectorRef: null,
+    groupRef: null,
   }))
   .views((self) => ({
     get store() {
@@ -135,11 +137,11 @@ const Model = types
 
     /// Visuals
     get pointEnabledSize() {
-      const customEnabledSize = self.control?.pointnsizeenabled;
+      const customEnabledSize = self.control?.pointsizeenabled;
       return customEnabledSize ? Number.parseInt(customEnabledSize) : 5;
     },
     get pointDisabledSize() {
-      const customDisabledSize = self.control?.pointnsizedisabled;
+      const customDisabledSize = self.control?.pointsizedisabled;
       return customDisabledSize ? Number.parseInt(customDisabledSize) : 3;
     },
     // Helper function to convert pointSize to radius values
@@ -155,6 +157,10 @@ const Model = types
         default:
           return { enabled: 6, disabled: 4 };
       }
+    },
+    get disabled() {
+      const tool = self.parent.getToolsManager().findSelectedTool();
+      return (tool?.disabled ?? false) || self.isReadOnly() || (!self.selected && !self.isDrawing);
     },
   }))
   .actions((self) => {
@@ -350,6 +356,26 @@ const Model = types
         });
       },
 
+      isHovered() {
+        const stage = self.groupRef.getStage();
+        const pointer = stage.getPointerPosition();
+
+        // Convert to pixel coords in the canvas backing the image
+        const { x, y } = self.parent?.layerZoomScalePosition ?? { x: 0, y: 0 };
+        return self.vectorRef.isPointOverShape(pointer.x, pointer.y);
+      },
+
+      // Checks is the region is being transformed or at least in
+      // transformable state (has at least 2 points selected)
+      isTransforming() {
+        const selection = self.vectorRef.getSelectedPointIds();
+        return selection.length > 1;
+      },
+
+      segGroupRef(ref) {
+        self.groupRef = ref;
+      },
+
       /**
        * Serializes region data in Label Studio format with relative coordinates
        * Converts from image coordinates back to relative coordinates for storage
@@ -451,7 +477,19 @@ const Model = types
       //
       // Will create a new point if it was started but never updated (regular click)
       commitPoint(x, y) {
-        self.vectorRef.commitPoint(x, y);
+        self.vectorRef?.commitPoint(x, y);
+      },
+
+      handleFinish() {
+        const tm = self.parent.getToolsManager();
+        const tool = tm.findSelectedTool();
+        if (tool.currentArea) {
+          tool?.commitDrawingRegion();
+        } else {
+          const annotation = self.parent?.annotation;
+          annotation?.toggleRegionSelection(self);
+        }
+        tool?.complete();
       },
     };
   });
@@ -485,76 +523,86 @@ const HtxVectorView = observer(({ item, suggestion }) => {
 
   return (
     <RegionWrapper item={item}>
-      <KonvaVector
-        ref={(kv) => item.setKonvaVectorRef(kv)}
-        initialPoints={Array.from(item.vertices)}
-        onPointsChange={(points) => {
-          item.updatePointsFromKonvaVector(points);
-        }}
-        onPathClosedChange={(isClosed) => {
-          item.onPathClosedChange(isClosed);
-        }}
-        onClick={(e) => {
-          // Handle region selection
-          if (item.parent.getSkipInteractions()) return;
-          if (item.isDrawing) return;
-          if (e.evt.altKey || e.evt.ctrlKey || e.evt.shiftKey || e.evt.metaKey) return;
+      <Group ref={(ref) => item.segGroupRef(ref)}>
+        <KonvaVector
+          ref={(kv) => item.setKonvaVectorRef(kv)}
+          initialPoints={Array.from(item.vertices)}
+          onFinish={(e) => {
+            e.evt.stopPropagation();
+            e.evt.preventDefault();
+            item.handleFinish();
+          }}
+          onPointsChange={(points) => {
+            item.updatePointsFromKonvaVector(points);
+          }}
+          onPathClosedChange={(isClosed) => {
+            item.onPathClosedChange(isClosed);
+          }}
+          onClick={(e) => {
+            if (e.evt.defaultPrevented) {
+              return;
+            }
+            // Handle region selection
+            if (item.parent.getSkipInteractions()) return;
+            if (item.isDrawing) return;
+            if (e.evt.altKey || e.evt.ctrlKey || e.evt.shiftKey || e.evt.metaKey) return;
 
-          e.cancelBubble = true;
+            e.cancelBubble = true;
 
-          // Allow selection regardless of whether the path is closed
-          // The Selection tool will handle multi-selection logic
-          if (store.annotationStore.selected.isLinkingMode) {
-            stage.container().style.cursor = Constants.DEFAULT_CURSOR;
-          }
+            // Allow selection regardless of whether the path is closed
+            // The Selection tool will handle multi-selection logic
+            if (store.annotationStore.selected.isLinkingMode) {
+              stage.container().style.cursor = Constants.DEFAULT_CURSOR;
+            }
 
-          item.setHighlight(false);
-          item.onClickRegion(e);
-        }}
-        onMouseEnter={() => {
-          if (store.annotationStore.selected.isLinkingMode) {
-            item.setHighlight(true);
-          }
-          item.updateCursor(true);
-        }}
-        onMouseLeave={() => {
-          if (store.annotationStore.selected.isLinkingMode) {
             item.setHighlight(false);
-          }
-          item.updateCursor();
-        }}
-        closed={item.closed}
-        width={stageWidth}
-        height={stageHeight}
-        scaleX={item.parent.stageZoom}
-        scaleY={item.parent.stageZoom}
-        x={0}
-        y={0}
-        transform={{ zoom: item.parent.stageZoom, offsetX, offsetY }}
-        fitScale={item.parent.zoomScale}
-        allowClose={item.control?.closable ?? false}
-        allowBezier={item.control?.curves ?? false}
-        minPoints={item.minPoints}
-        maxPoints={item.maxPoints}
-        skeletonEnabled={item.control?.skeleton ?? false}
-        stroke={item.selected ? "#ff0000" : regionStyles.strokeColor}
-        fill={item.selected ? "rgba(255, 0, 0, 0.3)" : regionStyles.fillColor}
-        strokeWidth={regionStyles.strokeWidth}
-        opacity={Number.parseFloat(item.control?.opacity || "1")}
-        pixelSnapping={item.control?.snap === "pixel"}
-        constrainToBounds={item.control?.constrainToBounds ?? true}
-        disabled={(!item.selected && !item.isDrawing) || suggestion || store.annotationStore.selected.isLinkingMode}
-        // Point styling - customize point appearance based on control settings
-        pointRadius={item.pointRadiusFromSize}
-        pointFill={item.selected ? "#ffffff" : "#f8fafc"}
-        pointStroke={item.selected ? "#ff0000" : regionStyles.strokeColor}
-        pointStrokeSelected="#ff6b35"
-        pointStrokeWidth={item.selected ? 2 : 1}
-      />
+            item.onClickRegion(e);
+          }}
+          onMouseEnter={() => {
+            if (store.annotationStore.selected.isLinkingMode) {
+              item.setHighlight(true);
+            }
+            item.updateCursor(true);
+          }}
+          onMouseLeave={() => {
+            if (store.annotationStore.selected.isLinkingMode) {
+              item.setHighlight(false);
+            }
+            item.updateCursor();
+          }}
+          closed={item.closed}
+          width={stageWidth}
+          height={stageHeight}
+          scaleX={item.parent.stageZoom}
+          scaleY={item.parent.stageZoom}
+          x={0}
+          y={0}
+          transform={{ zoom: item.parent.stageZoom, offsetX, offsetY }}
+          fitScale={item.parent.zoomScale}
+          allowClose={item.control?.closable ?? false}
+          allowBezier={item.control?.curves ?? false}
+          minPoints={item.minPoints}
+          maxPoints={item.maxPoints}
+          skeletonEnabled={item.control?.skeleton ?? false}
+          stroke={item.selected ? "#ff0000" : regionStyles.strokeColor}
+          fill={item.selected ? "rgba(255, 0, 0, 0.3)" : regionStyles.fillColor}
+          strokeWidth={regionStyles.strokeWidth}
+          opacity={Number.parseFloat(item.control?.opacity || "1")}
+          pixelSnapping={item.control?.snap === "pixel"}
+          constrainToBounds={item.control?.constrainToBounds ?? true}
+          disabled={item.disabled || suggestion || store.annotationStore.selected.isLinkingMode}
+          // Point styling - customize point appearance based on control settings
+          pointRadius={item.pointRadiusFromSize}
+          pointFill={item.selected ? "#ffffff" : "#f8fafc"}
+          pointStroke={item.selected ? "#ff0000" : regionStyles.strokeColor}
+          pointStrokeSelected="#ff6b35"
+          pointStrokeWidth={item.selected ? 2 : 1}
+        />
 
-      {item.vertices.length > 0 && (
-        <LabelOnRect item={item} color={regionStyles.strokeColor} strokewidth={regionStyles.strokeWidth} />
-      )}
+        {item.vertices.length > 0 && (
+          <LabelOnPolygon item={item} color={regionStyles.strokeColor} strokewidth={regionStyles.strokeWidth} />
+        )}
+      </Group>
     </RegionWrapper>
   );
 });

@@ -1,11 +1,11 @@
 import logging
 from datetime import datetime
 
-from core.permissions import all_permissions
+from core.permissions import ViewClassPermission, all_permissions
 from django.utils.decorators import method_decorator
 from drf_spectacular.utils import extend_schema
 from jwt_auth.auth import TokenAuthenticationPhaseout
-from jwt_auth.models import JWTSettings, LSAPIToken, TruncatedLSAPIToken
+from jwt_auth.models import LSAPIToken, TruncatedLSAPIToken
 from jwt_auth.serializers import (
     JWTSettingsSerializer,
     LSAPITokenCreateSerializer,
@@ -17,8 +17,8 @@ from rest_framework import generics, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import APIException
 from rest_framework.generics import CreateAPIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import TokenBackendError, TokenError
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -60,26 +60,23 @@ class TokenExistsError(APIException):
     ),
 )
 class JWTSettingsAPI(CreateAPIView):
-    queryset = JWTSettings.objects.all()
     serializer_class = JWTSettingsSerializer
-    permission_required = all_permissions.organizations_view
+    permission_required = ViewClassPermission(
+        GET=all_permissions.organizations_view,
+        POST=all_permissions.organizations_change,
+    )
+
+    def get_object(self):
+        jwt = self.request.user.active_organization.jwt
+        self.check_object_permissions(self.request, jwt)
+        return jwt
 
     def get(self, request, *args, **kwargs):
-        jwt_settings = request.user.active_organization.jwt
-        # Check if user has view permission
-        if not jwt_settings.has_view_permission(request.user):
-            return Response(
-                {'detail': 'You do not have permission to view JWT settings'}, status=status.HTTP_403_FORBIDDEN
-            )
+        jwt_settings = self.get_object()
         return Response(self.get_serializer(jwt_settings).data)
 
     def post(self, request, *args, **kwargs):
-        jwt_settings = request.user.active_organization.jwt
-        # Check if user has modify permission
-        if not jwt_settings.has_modify_permission(request.user):
-            return Response(
-                {'detail': 'You do not have permission to modify JWT settings'}, status=status.HTTP_403_FORBIDDEN
-            )
+        jwt_settings = self.get_object()
         serializer = self.get_serializer(data=request.data, instance=jwt_settings)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -137,7 +134,7 @@ class DecoratedTokenRefreshView(TokenRefreshView):
     ),
 )
 class LSAPITokenView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_required = all_permissions.users_token_any
     token_class = LSAPIToken
 
     def get_queryset(self):
@@ -226,7 +223,8 @@ class LSAPITokenRotateView(TokenViewBase):
     # Have to explicitly set authentication_classes here, due to how auth works in our middleware, request.user is not set
     # properly before executing the view.
     authentication_classes = [JWTAuthentication, TokenAuthenticationPhaseout, SessionAuthentication]
-    permission_classes = [IsAuthenticated]
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES
+    permission_required = all_permissions.users_token_any
     _serializer_class = 'jwt_auth.serializers.LSAPITokenRotateSerializer'
     token_class = LSAPIToken
 
@@ -247,11 +245,6 @@ class LSAPITokenRotateView(TokenViewBase):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        # Ensure the user is authenticated
-        if not request.user or not request.user.is_authenticated:
-            return Response({'detail': 'Authentication credentials were not provided or are invalid.'}, status=401)
-
         current_token = serializer.validated_data['refresh']
 
         # Blacklist the current token

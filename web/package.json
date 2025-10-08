@@ -15,10 +15,14 @@
     "lsf:watch": "nx run editor:build:development --watch",
     "lsf:serve": "NODE_ENV=development FRONTEND_HOSTNAME=http://localhost:3000 MODE=standalone nx run editor:serve:development",
     "lsf:e2e": "cd libs/editor/tests/e2e && yarn test",
+    "lsf:e2e:slow": "DEFAULT_CPU_THROTTLING=100 yarn lsf:e2e",
     "lsf:e2e:parallel": "cd libs/editor/tests/e2e && yarn test:parallel",
     "lsf:e2e:ci": "cd libs/editor/tests/e2e && yarn test:ci",
+    "lsf:e2e:flakey": "cd libs/editor/tests/e2e && yarn test:ci --grep \"@flakey\"",
     "lsf:integration": "nx run editor:integration",
+    "lsf:integration:slow": "DEFAULT_CPU_THROTTLING=4 DEFAULT_NETWORK_THROTTLING=4g nx run editor:integration",
     "lsf:integration:watch": "nx run editor:integration --watch",
+    "lsf:integration:watch:slow": "DEFAULT_CPU_THROTTLING=10 DEFAULT_NETWORK_THROTTLING=4g nx run editor:integration --watch",
     "lsf:unit": "nx run editor:unit",
     "dm:watch": "nx run datamanager:build:development --watch",
     "dm:unit": "nx run datamanager:unit",
@@ -101,6 +105,7 @@
     "react-joyride": "^2.9.3",
     "react-konva": "^18.2.10",
     "react-konva-utils": "^0.2.0",
+    "react-markdown": "^10.1.0",
     "react-router": "^5.2.0",
     "react-router-dom": "^5.2.0",
     "react-singleton-hook": "^3.1.1",
@@ -111,11 +116,10 @@
     "shadcn": "^2.1.8",
     "simplify-js": "^1.2.4",
     "storybook": "^9.0.13",
-
+    "sucrase": "^3.35.0",
     "tailwind-merge": "^2.6.0",
     "webfft": "^1.0.3",
     "xpath-range": "^1.1.1",
-    "sucrase": "^3.35.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -135,6 +139,7 @@
     "@biomejs/biome": "1.9.4",
     "@cypress/code-coverage": "^3.12.9",
     "@cypress/webpack-preprocessor": "^5.17.0",
+    "@module-federation/dts-plugin": "0.18.0",
     "@nx/cypress": "21.2.2",
     "@nx/jest": "21.2.2",
     "@nx/js": "21.2.2",
@@ -172,7 +177,6 @@
     "@types/react-window-infinite-loader": "^1.0.9",
     "@types/sanitize-html": "^2.13.0",
     "@types/sinon": "^17.0.3",
-
     "autoprefixer": "^10.4.20",
     "babel-jest": "29.7.0",
     "babel-loader": "^8.2.2",
@@ -233,6 +237,7 @@
     "yargs": "^17.7.1"
   },
   "resolutions": {
+    "@module-federation/dts-plugin": ">=0.18.0",
     "d3-color": "3.1.0",
     "debug": ">=4.3.1",
     "diff": ">=3.5.0",

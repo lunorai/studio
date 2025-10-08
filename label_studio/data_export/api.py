@@ -629,7 +629,6 @@ def set_convert_background_failure(job, connection, type, value, traceback_obj):
     ConvertedFormat.objects.filter(id=convert_id).update(status=Export.Status.FAILED, traceback=trace)
 
 
-@method_decorator(name='get', decorator=extend_schema(exclude=True))
 @method_decorator(
     name='post',
     decorator=extend_schema(
@@ -669,7 +668,7 @@ def set_convert_background_failure(job, connection, type, value, traceback_obj):
         },
     ),
 )
-class ExportConvertAPI(generics.RetrieveAPIView):
+class ExportConvertAPI(generics.CreateAPIView):
     queryset = Export.objects.all()
     lookup_url_kwarg = 'export_pk'
     permission_required = all_permissions.projects_change
@@ -681,11 +680,12 @@ class ExportConvertAPI(generics.RetrieveAPIView):
         export_type = serializer.validated_data['export_type']
         download_resources = serializer.validated_data.get('download_resources')
 
-        with transaction.atomic():
-            converted_format, created = ConvertedFormat.objects.get_or_create(export=snapshot, export_type=export_type)
+        converted_format, created = ConvertedFormat.objects.exclude(
+            status=ConvertedFormat.Status.FAILED
+        ).get_or_create(export=snapshot, export_type=export_type)
 
-            if not created:
-                raise ValidationError(f'Conversion to {export_type} already started')
+        if not created:
+            raise ValidationError(f'Conversion to {export_type} already started')
 
         start_job_async_or_sync(
             async_convert,

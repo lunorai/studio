@@ -33,10 +33,10 @@ from drf_spectacular.views import (
 
 urlpatterns = [
     re_path(r'^$', views.main, name='main'),
-    re_path(r'^sw\.js$', views.static_file_with_host_resolver('static/js/sw.js', content_type='text/javascript')),
+    re_path(r'^sw\.js$', views.static_file_with_host_resolver('js/sw.js', content_type='text/javascript')),
     re_path(
         r'^sw-fallback\.js$',
-        views.static_file_with_host_resolver('static/js/sw-fallback.js', content_type='text/javascript'),
+        views.static_file_with_host_resolver('js/sw-fallback.js', content_type='text/javascript'),
     ),
     re_path(r'^favicon\.ico$', RedirectView.as_view(url='https://app.lunor.quest/Lunor.png', permanent=True)),
     re_path(
@@ -56,7 +56,7 @@ urlpatterns = [
     ),
     re_path(
         r'^static/fonts/roboto/roboto.css$',
-        views.static_file_with_host_resolver('static/fonts/roboto/roboto.css', content_type='text/css'),
+        views.static_file_with_host_resolver('fonts/roboto/roboto.css', content_type='text/css'),
     ),
     re_path(r'^static/(?P<path>.*)$', serve, kwargs={'document_root': settings.STATIC_ROOT, 'show_indexes': True}),
     re_path(r'^', include('organizations.urls')),

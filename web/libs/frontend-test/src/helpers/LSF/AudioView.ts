@@ -397,6 +397,14 @@ class AudioViewHelper extends withMedia(
     }
 
     /**
+     * Wait a couple of animation frames based on the requestAnimationFrame pattern
+     */
+    waitForStableState() {
+      // This ensures React has completed its render cycle
+      cy.waitForFrames(2);
+    }
+
+    /**
      * Waits for canvas rendering to stabilize by checking that pixel colors remain consistent
      * @param x relative x coordinate to monitor
      * @param y relative y coordinate to monitor
@@ -603,15 +611,13 @@ class AudioViewHelper extends withMedia(
         return cy.get("audio").then(([audio]) => {
           return cy.get("body").then(($body) => {
             const currentTime = Date.now();
-            const audioTimeDiff = lastAudioTime
-              ? Math.abs(audio.currentTime - lastAudioTime)
-              : Number.POSITIVE_INFINITY;
+            const audioTimeDiff =
+              lastAudioTime !== null ? Math.abs(audio.currentTime - lastAudioTime) : Number.POSITIVE_INFINITY;
 
             if ($body.find("video").length > 0) {
               return cy.get("video").then(([video]) => {
-                const videoTimeDiff = lastVideoTime
-                  ? Math.abs(video.currentTime - lastVideoTime)
-                  : Number.POSITIVE_INFINITY;
+                const videoTimeDiff =
+                  lastVideoTime !== null ? Math.abs(video.currentTime - lastVideoTime) : Number.POSITIVE_INFINITY;
 
                 if (audioTimeDiff <= tolerance && videoTimeDiff <= tolerance) {
                   if (!stableStartTime) {

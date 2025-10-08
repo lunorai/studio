@@ -2,6 +2,7 @@ import type React from "react";
 import { Path } from "react-konva";
 import type { BezierPoint } from "../types";
 import chroma from "chroma-js";
+import type { KonvaEventObject } from "konva/lib/Node";
 
 interface VectorShapeProps {
   segments: Array<{ from: BezierPoint; to: BezierPoint }>;
@@ -13,7 +14,7 @@ interface VectorShapeProps {
   opacity?: number;
   transform?: { zoom: number; offsetX: number; offsetY: number };
   fitScale?: number;
-  onClick?: (e: any) => void;
+  onClick?: (e: KonvaEventObject<MouseEvent>) => void;
   onMouseEnter?: (e: any) => void;
   onMouseLeave?: (e: any) => void;
 }

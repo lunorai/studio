@@ -24,10 +24,7 @@ def next_task(project, queryset, **kwargs):
     next_task, queue_info = get_next_task(request.user, queryset, project, dm_queue)
 
     if next_task is None:
-        raise NotFound(
-            f'There are still some tasks to complete for the user={request.user}, '
-            f'but they seem to be locked by another user.'
-        )
+        raise NotFound(f'There are no tasks for {request.user}')
 
     # serialize task
     context = {'request': request, 'project': project, 'resolve_uri': True, 'annotations': False}

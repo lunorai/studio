@@ -174,7 +174,7 @@ class ImportStorageListFilesAPI(generics.CreateAPIView):
         from .functions import validate_storage_instance
 
         instance = validate_storage_instance(request, self.serializer_class)
-        limit = request.data.get('limit', settings.DEFAULT_STORAGE_LIST_LIMIT)
+        limit = int(request.data.get('limit', settings.DEFAULT_STORAGE_LIST_LIMIT))
 
         try:
             files = []
@@ -196,7 +196,8 @@ class ImportStorageListFilesAPI(generics.CreateAPIView):
 
             return Response({'files': files})
         except Exception as exc:
-            raise ValidationError(exc)
+            logger.exception('Error listing storage files: %s', exc)
+            raise ValidationError('Failed to list storage files')
 
 
 @extend_schema(exclude=True)

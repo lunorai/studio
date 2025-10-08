@@ -152,6 +152,14 @@ const RegionProperty: FC<RegionPropertyProps> = ({ property, label, region }) =>
     return coreType === types.boolean;
   }, [propertyType, isPrimitive]);
 
+  const isString = useMemo(() => {
+    if (!isPrimitive) return false;
+
+    const coreType = isOptionalType(propertyType) ? propertyType.getSubTypes() : propertyType;
+
+    return coreType === types.string || coreType[0] === types.string;
+  }, [propertyType, isPrimitive]);
+
   const onChangeHandler = useCallback(
     (value) => {
       if (value !== region.getProperty(property)) {
@@ -174,13 +182,15 @@ const RegionProperty: FC<RegionPropertyProps> = ({ property, label, region }) =>
   }, [region]);
 
   return (
-    <Elem name="property" tag="label">
+    <Elem name="property" mod={{ text: isString }} tag="label">
       {isBoolean ? (
         <Checkbox
           className={block?.elem("input").toClassName()}
           checked={value}
           onChange={(e) => onChangeHandler(e.target.checked)}
         />
+      ) : isString ? (
+        <RegionInput type="text" value={value} onChange={(v) => onChangeHandler(v)} />
       ) : isPrimitive ? (
         <RegionInput
           type={getInputType(propertyType)}
@@ -201,7 +211,7 @@ const RegionProperty: FC<RegionPropertyProps> = ({ property, label, region }) =>
   );
 };
 
-interface RegionInputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface RegionInputProps extends InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> {
   type: HTMLInputTypeAttribute;
   onChange?: (newValue: any) => void;
 }
@@ -221,7 +231,7 @@ const RegionInput: FC<RegionInputProps> = ({ onChange: onChangeValue, type, valu
   );
 
   const onChangeHandler = useCallback(
-    (e: ChangeEvent<HTMLInputElement>) => {
+    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       let value: number | string = e.target.value;
       let safeValue = true;
 
@@ -246,7 +256,7 @@ const RegionInput: FC<RegionInputProps> = ({ onChange: onChangeValue, type, valu
   );
 
   const onKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
+    (e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       if (type !== "number") return;
 
       if (e.key === "ArrowUp" || e.key === "ArrowDown") {
@@ -271,8 +281,10 @@ const RegionInput: FC<RegionInputProps> = ({ onChange: onChangeValue, type, valu
     updateValue(value);
   }, [value]);
 
+  const Tag = type === "text" ? "textarea" : "input";
+
   return (
-    <input
+    <Tag
       {...props}
       className={block?.elem("input").toClassName()}
       type="text"
@@ -280,6 +292,7 @@ const RegionInput: FC<RegionInputProps> = ({ onChange: onChangeValue, type, valu
       onChange={onChangeHandler}
       onKeyDown={onKeyDown}
       value={currentValue}
+      rows={type === "text" ? 3 : undefined}
     />
   );
 };

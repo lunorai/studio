@@ -2,7 +2,7 @@ import { AudioView, LabelStudio } from "@humansignal/frontend-test/helpers/LSF";
 
 const config = `
 <View>
-  <Video name="video" value="$url" sync="v1" />
+  <Video name="video" value="$url" sync="v1" framerate="29.970628" />
   <Audio name="audio" value="$url" hotkey="space" sync="v1" />
   <Header value="Sentiment"/>
   <ParagraphLabels name="label" toName="text">
@@ -102,7 +102,7 @@ describe("Sync: Video Paragraphs", () => {
 
     cy.log("Audio, Video are starting at 0");
     cy.get("audio").then(([audio]) => {
-      cy.get("video").then(([video]) => {
+      cy.get("video").should(([video]) => {
         expect(audio.currentTime).to.be.closeTo(video.currentTime, 0.1);
         expect(audio.currentTime).to.equal(0);
       });
@@ -182,6 +182,12 @@ describe("Sync: Video Paragraphs", () => {
       });
     });
 
+    // Get more time to ckeck play/pause before the end of the file
+    AudioView.clickAt(100, 0);
+    // @TODO: This wait allows "Play" click to have an effect. That's not for sure, but most probably there is a real problem with `sync` window that prevents using seek and play without a delay.
+    cy.wait(1000);
+    AudioView.waitForStableState();
+
     AudioView.playButton.click();
     AudioView.waitForPlayState(true, 8000, true); // true = check both audio and video
     AudioView.pauseButton.click();
@@ -206,21 +212,21 @@ describe("Sync: Video Paragraphs", () => {
     AudioView.isReady();
 
     cy.get("audio").then(([audio]) => {
-      cy.get("video").then(([video]) => {
+      cy.get("video").should(([video]) => {
         expect(audio.playbackRate).to.equal(video.playbackRate);
         expect(audio.playbackRate).to.equal(1);
       });
     });
 
-    AudioView.setPlaybackSpeedInput(1.5, true); // true = check both audio and video
+    AudioView.setPlaybackSpeedInput(0.5, true); // true = check both audio and video
     AudioView.playButton.click();
     AudioView.waitForPlayState(true, 8000, true); // true = check both audio and video
 
-    cy.log("Changing playback speed to 1.5x for audio, video and paragraph audio during playback");
+    cy.log("Changing playback speed to 0.5x for audio, video and paragraph audio during playback");
     cy.get("audio").then(([audio]) => {
-      cy.get("video").then(([video]) => {
+      cy.get("video").should(([video]) => {
         expect(audio.playbackRate).to.equal(video.playbackRate);
-        expect(audio.playbackRate).to.equal(1.5);
+        expect(audio.playbackRate).to.equal(0.5);
       });
     });
 
@@ -232,16 +238,15 @@ describe("Sync: Video Paragraphs", () => {
 
     cy.log("Changing playback speed to 1x for audio, video and paragraph audio during playback");
     cy.get("audio").then(([audio]) => {
-      cy.get("video").then(([video]) => {
+      cy.get("video").should(([video]) => {
         expect(audio.playbackRate).to.equal(video.playbackRate);
         expect(audio.playbackRate).to.equal(1);
       });
     });
 
-    AudioView.pauseButton.click();
     cy.log("Audio, video and paragraph audio played to the same time");
     cy.get("audio").then(([audio]) => {
-      cy.get("video").then(([video]) => {
+      cy.get("video").should(([video]) => {
         expect(audio.currentTime).to.be.closeTo(video.currentTime, 0.1);
       });
     });

@@ -403,13 +403,11 @@ export class PointCreationManager {
     // Set this as the last added point
     this.props.setLastAddedPointId?.(newPoint.id);
 
-    // Active point management
-    if (this.props.skeletonEnabled && this.props.activePointId) {
-      // In skeleton mode: always maintain the manually selected point for branching
-    } else {
-      // Default behavior: set the new point as active
-      this.props.setActivePointId?.(newPoint.id);
-    }
+    // Note: We don't need to select the point since we're using activePointId for onFinish logic
+
+    // Active point management - always set the new point as active
+    // This ensures onFinish logic works correctly (new point becomes active immediately)
+    this.props.setActivePointId?.(newPoint.id);
 
     this.props.onPointsChange?.(newPoints);
 
@@ -463,13 +461,9 @@ export class PointCreationManager {
     // Set this as the last added point
     this.props.setLastAddedPointId?.(newPoint.id);
 
-    // Active point management
-    if (this.props.skeletonEnabled && this.props.activePointId) {
-      // In skeleton mode: always maintain the manually selected point for branching
-    } else {
-      // Default behavior: set the new point as active
-      this.props.setActivePointId?.(newPoint.id);
-    }
+    // Active point management - always set the new point as active
+    // This ensures onFinish logic works correctly (new point becomes active immediately)
+    this.props.setActivePointId?.(newPoint.id);
 
     this.props.onPointsChange?.(newPoints);
 
@@ -544,13 +538,11 @@ export class PointCreationManager {
     // Set this as the last added point
     this.props.setLastAddedPointId?.(newPoint.id);
 
-    // Active point management
-    if (this.props.skeletonEnabled && this.props.activePointId) {
-      // In skeleton mode: always maintain the manually selected point for branching
-    } else {
-      // Default behavior: set the new point as active
-      this.props.setActivePointId?.(newPoint.id);
-    }
+    // Note: We don't need to select the point since we're using activePointId for onFinish logic
+
+    // Active point management - always set the new point as active
+    // This ensures onFinish logic works correctly (new point becomes active immediately)
+    this.props.setActivePointId?.(newPoint.id);
 
     this.props.onPointsChange?.(newPoints);
 

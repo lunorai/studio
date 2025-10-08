@@ -64,8 +64,8 @@ const TagAttrs = types.model({
   maxpoints: types.optional(types.maybeNull(types.string), null),
   constraintobounds: types.optional(types.maybeNull(types.boolean), false),
   skeleton: types.optional(types.maybeNull(types.boolean), false),
-  pointnsizeenabled: types.optional(types.maybeNull(types.string), "5"),
-  pointnsizedisabled: types.optional(types.maybeNull(types.string), "3"),
+  pointsizeenabled: types.optional(types.maybeNull(types.string), "5"),
+  pointsizedisabled: types.optional(types.maybeNull(types.string), "3"),
 });
 
 const Validation = types.model({
