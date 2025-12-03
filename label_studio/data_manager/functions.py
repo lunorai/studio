@@ -10,6 +10,7 @@ from core.feature_flags import flag_set
 from core.utils.common import int_from_request
 from data_manager.models import View
 from data_manager.prepare_params import PrepareParams
+from projects.models import Project
 from django.conf import settings
 from rest_framework.generics import get_object_or_404
 from tasks.models import Task
@@ -328,6 +329,15 @@ def get_prepare_params(request, project):
 
 def get_prepared_queryset(request, project):
     prepare_params = get_prepare_params(request, project)
+    # attach the real Project instance so downstream code (e.g. batching)
+    # can access project fields without re-querying
+    if isinstance(prepare_params, PrepareParams):
+        try:
+            prepare_params.project_instance = project if isinstance(project, Project) else Project.objects.get(
+                pk=prepare_params.project
+            )
+        except Project.DoesNotExist:
+            prepare_params.project_instance = None
     queryset = Task.prepared.only_filtered(prepare_params=prepare_params)
     return queryset
 

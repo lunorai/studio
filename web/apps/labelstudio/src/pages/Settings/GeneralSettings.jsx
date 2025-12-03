@@ -40,7 +40,7 @@ export const GeneralSettings = () => {
                     <EnterpriseBadge className="ml-2" />
                   </Elem>
                   <Select placeholder="Select an option" disabled options={[]} />
-                  <Typography size="small" className="my-tight">
+                  {/* <Typography size="small" className="my-tight">
                     Simplify project management by organizing projects into workspaces.{" "}
                     <a
                       target="_blank"
@@ -56,7 +56,7 @@ export const GeneralSettings = () => {
                     >
                       Learn more
                     </a>
-                  </Typography>
+                  </Typography> */}
                 </Block>
               )}
               <RadioGroup name="color" label="Color" size="large" labelProps={{ size: "large" }}>
@@ -118,7 +118,7 @@ export const GeneralSettings = () => {
           </Form>
         </Block>
       </Elem>
-      {isFF(FF_LSDV_E_297) && <HeidiTips collection="projectSettings" />}
+      {isFF(FF_LSDV_E_297) && /* <HeidiTips collection="projectSettings" /> */ null}
     </Block>
   );
 };

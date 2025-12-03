@@ -89,31 +89,32 @@ const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, 
         />
       </div>
       {isFF(FF_LSDV_E_297) && (
-        <div className="w-full flex flex-col gap-2">
-          <label>
-            Workspace
-            <EnterpriseBadge className="ml-2" />
-          </label>
-          <Select placeholder="Select an option" disabled options={[]} triggerClassName="!flex-1" />
-          <Typography size="small" className="mt-tight mb-wider">
-            Simplify project management by organizing projects into workspaces.{" "}
-            <a
-              href={createURL(
-                "https://docs.humansignal.com/guide/manage_projects#Create-workspaces-to-organize-projects",
-                {
-                  experiment: "project_creation_dropdown",
-                  treatment: "simplify_project_management",
-                },
-              )}
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:no-underline text-[#EABE00]"
-            >
-              Learn more
-            </a>
-          </Typography>
-          <HeidiTips collection="projectCreation" />
-        </div>
+        // <div className="w-full flex flex-col gap-2">
+        //   <label>
+        //     Workspace
+        //     <EnterpriseBadge className="ml-2" />
+        //   </label>
+        //   <Select placeholder="Select an option" disabled options={[]} triggerClassName="!flex-1" />
+        //   {/* <Typography size="small" className="mt-tight mb-wider">
+        //     Simplify project management by organizing projects into workspaces.{" "}
+        //     <a
+        //       href={createURL(
+        //         "https://docs.humansignal.com/guide/manage_projects#Create-workspaces-to-organize-projects",
+        //         {
+        //           experiment: "project_creation_dropdown",
+        //           treatment: "simplify_project_management",
+        //         },
+        //       )}
+        //       target="_blank"
+        //       rel="noreferrer"
+        //       className="underline hover:no-underline text-[#EABE00]"
+        //     >
+        //       Learn more
+        //     </a>
+        //   </Typography> */}
+        //   {/* <HeidiTips collection="projectCreation" /> */}
+        // </div>
+        null
       )}
     </form>
   );

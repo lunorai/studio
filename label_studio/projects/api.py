@@ -38,6 +38,7 @@ from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiRespo
 from label_studio_sdk.label_interface.interface import LabelInterface
 from ml.serializers import MLBackendSerializer
 from projects.functions.next_task import get_next_task
+from projects.functions.user_batch_assignment import get_or_create_user_assignment
 from projects.functions.stream_history import get_label_stream_history
 from projects.functions.utils import recalculate_created_annotations_and_labels_from_scratch
 from projects.models import Project, ProjectImport, ProjectManager, ProjectReimport, ProjectSummary, FinalSubmission
@@ -206,6 +207,39 @@ class UpdateChallengeStatusAPI(APIView):
         project.save(update_fields=['challenge_status'])
 
         return Response({'success': True, 'challenge_status': project.challenge_status})
+
+
+class ProjectUserTasksAPI(APIView):
+    """
+    Return the fixed 10–20 task batch assigned to the requesting user for a project.
+    This includes tasks even if the user has already annotated them.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+        try:
+            project = Project.objects.get(pk=pk)
+        except Project.DoesNotExist:
+            raise NotFound(detail='Project not found')
+
+        user = request.user
+        if not user or not user.is_authenticated:
+            # If you plan to use anonymous auth, adapt this
+            return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        assignment = get_or_create_user_assignment(user, project)
+
+        if assignment is None:
+            # No batch size configured: fall back to default ordering
+            # (here we simply return all project tasks ordered by id,
+            #  but you can adapt this to mirror Data Manager ordering if needed)
+            tasks_qs = Task.objects.filter(project=project).order_by('id')
+        else:
+            tasks_qs = assignment.tasks.all().order_by('id')
+
+        serializer = TaskSimpleSerializer(tasks_qs, many=True)
+        return Response(serializer.data)
 
 @method_decorator(
     name='get',
@@ -605,6 +639,14 @@ class ProjectNextTaskAPI(generics.RetrieveAPIView):
         dm_queue = filters_ordering_selected_items_exist(request.data)
         prepared_tasks = get_prepared_queryset(request, project)
 
+        # If per-user batch size is configured, restrict the queue to the
+        # circular batch assigned to this user.
+        assignment = get_or_create_user_assignment(request.user, project)
+        if assignment is not None:
+            prepared_tasks = prepared_tasks.filter(
+                id__in=assignment.tasks.values_list('id', flat=True)
+            )
+
         next_task, queue_info = get_next_task(request.user, prepared_tasks, project, dm_queue)
 
         if next_task is None:
@@ -879,9 +921,20 @@ class ProjectTaskListAPI(GetParentObjectMixin, generics.ListCreateAPIView, gener
             return TaskSerializer
 
     def filter_queryset(self, queryset):
-        project = generics.get_object_or_404(Project.objects.for_user(self.request.user), pk=self.kwargs.get('pk', 0))
-        # ordering is deprecated here
-        tasks = Task.objects.filter(project=project).order_by('-updated_at')
+        project = generics.get_object_or_404(
+            Project.objects.for_user(self.request.user),
+            pk=self.kwargs.get('pk', 0),
+        )
+
+        # If per-user batch size is configured, only show the user's
+        # assigned circular batch in the project task list.
+        assignment = get_or_create_user_assignment(self.request.user, project)
+        if assignment is not None:
+            tasks = assignment.tasks.all().order_by('-updated_at')
+        else:
+            # Fallback to original behaviour: show all project tasks
+            tasks = Task.objects.filter(project=project).order_by('-updated_at')
+
         page = paginator(tasks, self.request)
         if page:
             return page
