@@ -34,13 +34,13 @@ export const GeneralSettings = () => {
 
               <TextArea name="description" label="Description" style={{ minHeight: 128 }} />
               {isFF(FF_LSDV_E_297) && (
-                <Block name="workspace-placeholder">
-                  <Elem name="badge-wrapper">
-                    <Elem name="title">Workspace</Elem>
-                    <EnterpriseBadge className="ml-2" />
-                  </Elem>
-                  <Select placeholder="Select an option" disabled options={[]} />
-                  {/* <Typography size="small" className="my-tight">
+                // <Block name="workspace-placeholder">
+                //   <Elem name="badge-wrapper">
+                //     <Elem name="title">Workspace</Elem>
+                //     <EnterpriseBadge className="ml-2" />
+                //   </Elem>
+                //   <Select placeholder="Select an option" disabled options={[]} />
+                  /* <Typography size="small" className="my-tight">
                     Simplify project management by organizing projects into workspaces.{" "}
                     <a
                       target="_blank"
@@ -56,8 +56,9 @@ export const GeneralSettings = () => {
                     >
                       Learn more
                     </a>
-                  </Typography> */}
-                </Block>
+                  </Typography> */
+                // </Block>
+              null
               )}
               <RadioGroup name="color" label="Color" size="large" labelProps={{ size: "large" }}>
                 {colors.map((color) => (
@@ -67,7 +68,7 @@ export const GeneralSettings = () => {
                 ))}
               </RadioGroup>
 
-              <RadioGroup label="Task Sampling" labelProps={{ size: "large" }} name="sampling" simple>
+              {/* <RadioGroup label="Task Sampling" labelProps={{ size: "large" }} name="sampling" simple>
                 {samplings.map(({ value, label, description }) => (
                   <RadioGroup.Button
                     key={value}
@@ -104,7 +105,7 @@ export const GeneralSettings = () => {
                     }
                   />
                 )}
-              </RadioGroup>
+              </RadioGroup> */}
             </Form.Row>
 
             <Form.Actions>

@@ -56,7 +56,7 @@ export const StorageSummary = ({ target, storage, className, storageTypes = [] }
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           {!window.APP_SETTINGS?.whitelabel_is_active && (
             <div>
-              <>
+              {/* <>
                 <a
                   href="https://labelstud.io/guide/storage.html#Troubleshooting"
                   target="_blank"
@@ -66,7 +66,7 @@ export const StorageSummary = ({ target, storage, className, storageTypes = [] }
                   See docs
                 </a>{" "}
                 for troubleshooting tips on cloud storage connections.
-              </>
+              </> */}
             </div>
           )}
           <Space>

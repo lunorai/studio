@@ -28,9 +28,9 @@ const EmptyConfigPlaceholder = () => (
     <p>
       Start from one of our predefined templates or create your own config on the Code panel. The labeling config is
       XML-based and you can{" "}
-      <a href="https://labelstud.io/tags/" target="_blank" rel="noreferrer" className="text-[#EABE00]">
+      {/* <a href="https://labelstud.io/tags/" target="_blank" rel="noreferrer" className="text-[#EABE00]">
         read about the available tags in our documentation
-      </a>
+      </a> */}
       .
     </p>
   </div>
@@ -475,10 +475,10 @@ const Configurator = ({
   const extra = (
     <p className={configClass.elem("tags-link")}>
       Configure the labeling interface with tags.
-      <br />
-      <a href="https://labelstud.io/tags/" target="_blank" rel="noreferrer" className="!text-[#EABE00] hover:!text-[#EABE00] ">
+      {/* <br /> */}
+      {/* <a href="https://labelstud.io/tags/" target="_blank" rel="noreferrer" className="!text-[#EABE00] hover:!text-[#EABE00] ">
         See all available tags
-      </a>
+      </a> */}
       .
     </p>
   );

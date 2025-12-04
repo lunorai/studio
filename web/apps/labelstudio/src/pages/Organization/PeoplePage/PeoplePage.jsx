@@ -72,7 +72,7 @@ export const PeoplePage = () => {
         <Space spread>
           <Space />
 
-          <Space>
+          {/* <Space>
 
             {isOwner && (isFF(FF_AUTH_TOKENS) && (
               <Button look="outlined" onClick={showApiTokenSettingsModal} aria-label="Show API token settings" 
@@ -92,7 +92,7 @@ export const PeoplePage = () => {
                   Add People
                 </Button>
               )}
-          </Space>
+          </Space> */}
         </Space>
       </Elem>
       <Elem name="content">
