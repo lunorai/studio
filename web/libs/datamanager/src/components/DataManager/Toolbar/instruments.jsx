@@ -245,7 +245,7 @@ export const instruments = {
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error("Failed to export annotations by me:", err);
-            store?.SDK?.invoke?.("toast", { message: `Upload failed: ${String(err)}`.slice(0, 300), type: "error" });
+            store?.SDK?.invoke?.("toast", { message: `Something went wrong. Please try again.`, type: "error" });
           } finally {
             setLoading(false);
           }

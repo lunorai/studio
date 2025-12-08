@@ -475,7 +475,7 @@ export const ImportPage = ({
                       <dt>PDF</dt>
                       <dd>{supportedExtensions.pdf.join(", ")}</dd>
                     </dl>
-                    <div className="tips">
+                    {/* <div className="tips">
                       <b>Important:</b>
                       <ul className="mt-2 ml-4 list-disc font-normal">
                         <li>
@@ -519,7 +519,7 @@ export const ImportPage = ({
                           .
                         </li>
                       </ul>
-                    </div>
+                    </div> */}
                   </div>
                 </label>
               </div>

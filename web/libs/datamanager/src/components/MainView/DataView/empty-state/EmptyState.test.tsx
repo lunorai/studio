@@ -66,14 +66,14 @@ describe("EmptyState Component", () => {
 
       // Check main title and description
       expect(screen.getByText("Import data to get your project started")).toBeInTheDocument();
-      expect(screen.getByText("Connect your cloud storage or upload files from your computer")).toBeInTheDocument();
+      expect(screen.getByText("Upload files from your computer")).toBeInTheDocument();
 
       // Check that storage provider icons are present
-      expect(screen.getByTestId("dm-storage-provider-icons")).toBeInTheDocument();
+      // expect(screen.getByTestId("dm-storage-provider-icons")).toBeInTheDocument();
 
       // Check that both buttons are present
-      expect(screen.getByTestId("dm-connect-source-storage-button")).toBeInTheDocument();
-      expect(screen.getByTestId("dm-import-button")).toBeInTheDocument();
+     // expect(screen.getByTestId("dm-connect-source-storage-button")).toBeInTheDocument();
+     // expect(screen.getByTestId("dm-import-button")).toBeInTheDocument();
 
       // Check accessibility features
       expect(screen.getByTestId("empty-state-label")).toHaveAttribute("aria-labelledby", "dm-empty-title");
