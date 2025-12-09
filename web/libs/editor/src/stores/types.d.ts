@@ -136,6 +136,9 @@ type MSTUserExtended = {
   initials: string | null;
   phone: string | null;
   displayName: string | null;
+  activeOrganizationMeta?: {
+    email?: string;
+  };
 };
 
 type MSTAnchor = {
@@ -184,6 +187,7 @@ export type MSTStore = {
   isSubmitting: boolean;
   // @todo WHAT IS THIS?
   explore: any;
+  user?: MSTUserExtended;
   task: {
     data: string;
     dataObj: Record<string, any>;

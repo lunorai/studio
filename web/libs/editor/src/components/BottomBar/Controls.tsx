@@ -12,6 +12,7 @@ import { Button, ButtonGroup, type ButtonProps } from "@humansignal/ui";
 import { IconBan, IconChevronDown } from "@humansignal/icons";
 import { Dropdown } from "../../common/Dropdown/Dropdown";
 import type { CustomButtonType } from "../../stores/CustomButton";
+import type { MSTAnnotation, MSTStore } from "../../stores/types";
 import { Block, cn, Elem } from "../../utils/bem";
 import { FF_REVIEWER_FLOW, isFF } from "../../utils/feature-flags";
 import { isDefined, toArray } from "../../utils/utilities";
@@ -76,7 +77,11 @@ export const Controls = controlsInjector<{ annotation: MSTAnnotation }>(
     const buttons: React.ReactNode[] = [];
 
     const [isInProgress, setIsInProgress] = useState(false);
-    const disabled = !annotationEditable || store.isSubmitting || historySelected || isInProgress;
+    
+    // Check if user is organization owner/admin account
+    const isOrgAdminAccount = store.user?.activeOrganizationMeta?.email && store.user?.email === store.user?.activeOrganizationMeta?.email;
+    
+    const disabled = !annotationEditable || store.isSubmitting || historySelected || isInProgress || isOrgAdminAccount;
     const submitDisabled = store.hasInterface("annotations:deny-empty") && results.length === 0;
 
     /** Check all things related to comments and then call the action if all is good */
@@ -116,6 +121,17 @@ export const Controls = controlsInjector<{ annotation: MSTAnnotation }>(
     );
 
     if (annotation.isNonEditableDraft) return <></>;
+    
+    // Organization admin accounts cannot submit or update annotations
+    if (isOrgAdminAccount) {
+      return (
+        <Block name="controls">
+          <div className="text-gray-600 text-sm">
+            Organization admin accounts cannot submit or update annotations
+          </div>
+        </Block>
+      );
+    }
 
     const buttonsBefore = customButtons.get("_before");
     const buttonsReplacement = customButtons.get("_replace");

@@ -251,6 +251,7 @@ class ProjectSerializer(FlexFieldsModelSerializer):
             'config_suitable_for_bulk_annotation',
             'challenge_id',
             'round',
+            'per_user_batch_size',
             'participants',
             'challenge_status',
         ]

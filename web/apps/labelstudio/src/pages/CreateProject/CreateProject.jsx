@@ -35,6 +35,8 @@ const ProjectName = ({
   onChallengeSelect,
   challenges,
   challengesLoading,
+  perUserBatchSize,
+  setPerUserBatchSize,
 }) => {
   const hasChallengeOptions = challenges && challenges.length > 0;
   const lockFields = challengesLoading || hasChallengeOptions;
@@ -102,6 +104,26 @@ const ProjectName = ({
           onChange={(e) => setDescription(e.target.value)}
           className="project-description w-full"
           readOnly={lockFields}
+        />
+      </div>
+      <div className="w-full flex flex-col gap-2">
+        <label className="w-full" htmlFor="per_user_batch_size">
+          Per-user batch size
+        </label>
+        <Select
+          id="per_user_batch_size"
+          name="per_user_batch_size"
+          placeholder="Select batch size"
+          options={[
+            { label: "All", value: 0 },
+            { label: "10", value: 10 },
+            { label: "20", value: 20 },
+            { label: "30", value: 30 },
+            { label: "50", value: 50 },
+          ]}
+          value={perUserBatchSize}
+          onChange={(v) => setPerUserBatchSize(Number(v) || 0)}
+          triggerClassName="!flex-1"
         />
       </div>
       {!lockFields && (
@@ -195,6 +217,7 @@ export const CreateProject = ({ onClose }) => {
   const [selectedChallenge, setSelectedChallenge] = React.useState("");
   const [challenges, setChallenges] = React.useState([]);
   const [challengesLoading, setChallengesLoading] = React.useState(false);
+  const [perUserBatchSize, setPerUserBatchSize] = React.useState(0);
 
   React.useEffect(() => {
     const GRAPHQL_ENDPOINT = process.env.GRAPHQL_ENDPOINT;
@@ -304,6 +327,12 @@ export const CreateProject = ({ onClose }) => {
     project && !name && setName(project.title);
   }, [project]);
 
+  React.useEffect(() => {
+    if (project) {
+      setPerUserBatchSize(project.per_user_batch_size ?? 0);
+    }
+  }, [project]);
+
   const projectBody = React.useMemo(
     () => ({
       title: name,
@@ -311,8 +340,9 @@ export const CreateProject = ({ onClose }) => {
       challenge_id: challengeId,
       round,
       label_config: project?.label_config ?? "<View></View>",
+      per_user_batch_size: perUserBatchSize === 0 ? null : perUserBatchSize,
     }),
-    [name, description, challengeId, round, project?.label_config],
+    [name, description, challengeId, round, project?.label_config, perUserBatchSize],
   );
 
   const onCreate = React.useCallback(async () => {
@@ -425,6 +455,8 @@ export const CreateProject = ({ onClose }) => {
           onChallengeSelect={handleChallengeSelect}
           challenges={challenges}
           challengesLoading={challengesLoading}
+          perUserBatchSize={perUserBatchSize}
+          setPerUserBatchSize={setPerUserBatchSize}
         />
         <ImportPage
           project={project}
