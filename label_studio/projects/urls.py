@@ -1,6 +1,12 @@
 from django.urls import include, path
 from . import api, views
-from .api import UpdateParticipantsAPI, UpdateChallengeStatusAPI, FinalSubmissionCheckAPI, FinalSubmissionCreateAPI
+from .api import (
+    UpdateParticipantsAPI,
+    UpdateChallengeStatusAPI,
+    FinalSubmissionCheckAPI,
+    FinalSubmissionCreateAPI,
+    ProjectUserTasksAPI,
+)
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
 from django.urls import include, path
@@ -44,6 +50,8 @@ _api_urlpatterns = [
     path('<int:pk>/reimports/<int:reimport_pk>/', api.ProjectReimportAPI.as_view(), name='project-reimports'),
     # Tasks list for the project: get and destroy
     path('<int:pk>/tasks/', api.ProjectTaskListAPI.as_view(), name='project-tasks-list'),
+    # Fixed 10–20 task batch for current user
+    path('<int:pk>/user-tasks/', ProjectUserTasksAPI.as_view(), name='project-user-tasks'),
     # Generate sample task for this project
     path('<int:pk>/sample-task/', api.ProjectSampleTask.as_view(), name='project-sample-task'),
     # List available model versions

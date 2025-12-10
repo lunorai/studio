@@ -115,26 +115,48 @@ recalculate_all_stats = load_func(settings.RECALCULATE_ALL_STATS)
 
 
 class Project(ProjectMixin, models.Model):
-    participants = models.JSONField(_('participants'), default=list, blank=True, null=True, help_text='List of participant usernames')
+    participants = models.JSONField(
+        _('participants'),
+        default=list,
+        blank=True,
+        null=True,
+        help_text='List of participant usernames',
+    )
     challenge_id = models.CharField(
         _('challenge id'),
         max_length=255,
         blank=True,
         null=True,
         default='',
-        help_text='Optional challenge id for project integration.'
+        help_text='Optional challenge id for project integration.',
     )
     round = models.PositiveIntegerField(
         _('round'),
         blank=True,
         null=True,
         default=None,
-        help_text='Round number of the challenge.'
+        help_text='Round number of the challenge.',
     )
     challenge_status = models.BooleanField(
         _('challenge status'),
         default=True,
-        help_text='True means active; False means not active.'
+        help_text='True means active; False means not active.',
+    )
+    # Global circular batch assignment for per-user questions
+    global_task_index = models.PositiveIntegerField(
+        _('global task index'),
+        default=0,
+        help_text='Global pointer for circular per-user batch assignment.',
+    )
+    per_user_batch_size = models.PositiveIntegerField(
+        _('per user batch size'),
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            'Number of tasks initially assigned to each user for circular batching. '
+            'If empty or 0, tasks are shown using the default project behavior.'
+        ),
     )
 
     class SkipQueue(models.TextChoices):

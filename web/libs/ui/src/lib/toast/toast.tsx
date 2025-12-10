@@ -86,16 +86,25 @@ export interface ToastActionProps extends ToastPrimitive.ToastActionProps {
   onClose?: () => void;
 }
 export const ToastAction: FC<ToastActionProps> = ({ children, onClose, altText, ...props }) => (
+  // <ToastPrimitive.Action altText={altText} asChild className="pointer-events-none">
+  //   <Button
+  //     look="string"
+  //     size="small"
+  //     className={cn(styles.toast__action, "pointer-events-all")}
+  //     onClick={onClose}
+  //     {...props}
+  //   >
+  //     {children}
+  //   </Button>
+  // </ToastPrimitive.Action>
   <ToastPrimitive.Action altText={altText} asChild className="pointer-events-none">
-    <Button
-      look="string"
-      size="small"
+    <span
       className={cn(styles.toast__action, "pointer-events-all")}
       onClick={onClose}
       {...props}
     >
       {children}
-    </Button>
+    </span>
   </ToastPrimitive.Action>
 );
 export type ToastShowArgs = {

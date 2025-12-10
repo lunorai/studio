@@ -455,9 +455,18 @@ class AnnotationAPI(generics.RetrieveUpdateDestroyAPIView):
     queryset = Annotation.objects.all()
 
     def perform_destroy(self, annotation):
+        # Check if user is organization owner/admin account and deny deletion
+        user = self.request.user
+        if user.active_organization is not None and user.active_organization.created_by == user:
+            raise PermissionDenied('Organization admin accounts cannot delete annotations')
         annotation.delete()
 
     def update(self, request, *args, **kwargs):
+        # Check if user is organization owner/admin account and deny update
+        user = request.user
+        if user.active_organization is not None and user.active_organization.created_by == user:
+            raise PermissionDenied('Organization admin accounts cannot update annotations')
+        
         # save user history with annotator_id, time & annotation result
         annotation = self.get_object()
         # use updated instead of save to avoid duplicated signals
@@ -594,6 +603,11 @@ class AnnotationsListAPI(GetParentObjectMixin, generics.ListCreateAPIView):
             pass
 
     def perform_create(self, ser):
+        # Check if user is organization owner/admin account and deny creation
+        user = self.request.user
+        if user.active_organization is not None and user.active_organization.created_by == user:
+            raise PermissionDenied('Organization admin accounts cannot create annotations')
+        
         task = self.parent_object
         # annotator has write access only to annotations and it can't be checked it after serializer.save()
         user = self.request.user
@@ -672,6 +686,11 @@ class AnnotationDraftListAPI(generics.ListCreateAPIView):
         return queryset.filter(task_id=task_id)
 
     def perform_create(self, serializer):
+        # Check if user is organization owner/admin account and deny draft creation
+        user = self.request.user
+        if user.active_organization is not None and user.active_organization.created_by == user:
+            raise PermissionDenied('Organization admin accounts cannot create annotation drafts')
+        
         task_id = self.kwargs['pk']
         annotation_id = self.kwargs.get('annotation_id')
         user = self.request.user

@@ -166,7 +166,7 @@ class ExportAPI(generics.RetrieveAPIView):
         return Project.objects.filter(organization=self.request.user.active_organization)
 
     def get_task_queryset(self, queryset):
-        return queryset.select_related('project').prefetch_related('annotations', 'predictions')
+        return queryset.select_related('project').prefetch_related('annotations', 'annotations__completed_by', 'predictions')
 
     def get(self, request, *args, **kwargs):
         project = self.get_object()
@@ -189,7 +189,15 @@ class ExportAPI(generics.RetrieveAPIView):
         if tasks_ids and len(tasks_ids) > 0:
             logger.debug(f'Select only subset of {len(tasks_ids)} tasks')
             query = query.filter(id__in=tasks_ids)
-        if only_finished:
+        
+        # If filtering by current user's annotations, get current user ID early
+        current_user_id = None
+        if annotations_by_me:
+            current_user_id = getattr(request.user, 'id', None)
+            if current_user_id is not None:
+                # Filter to only tasks that have annotations from current user
+                query = query.filter(annotations__completed_by=current_user_id).distinct()
+        elif only_finished:
             query = query.filter(annotations__isnull=False).distinct()
 
         task_ids = query.values_list('id', flat=True)
@@ -206,12 +214,10 @@ class ExportAPI(generics.RetrieveAPIView):
         logger.debug('Prepare export files')
 
         # Optionally filter annotations to only those completed by current user
-        if annotations_by_me:
-            current_user_id = getattr(request.user, 'id', None)
-            if current_user_id is not None:
-                for task in tasks:
-                    anns = task.get('annotations') or []
-                    task['annotations'] = [a for a in anns if a.get('completed_by') == current_user_id]
+        if annotations_by_me and current_user_id is not None:
+            for task in tasks:
+                anns = task.get('annotations') or []
+                task['annotations'] = [a for a in anns if a.get('completed_by') == current_user_id]
 
         export_file, content_type, filename = DataExport.generate_export_file(
             project, tasks, export_type, download_resources, request.GET, hostname=request.build_absolute_uri('/')

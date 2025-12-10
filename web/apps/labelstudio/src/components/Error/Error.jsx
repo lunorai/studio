@@ -89,9 +89,9 @@ export const ErrorWrapper = ({
       {!minimal && (
         <Elem name="actions">
           <Space spread>
-            <Elem tag={Button} name="action-slack" target="_blank" icon={<IconSlack />} href={SLACK_INVITE_URL}>
+            {/* <Elem tag={Button} name="action-slack" target="_blank" icon={<IconSlack />} href={SLACK_INVITE_URL}>
               Ask on Slack
-            </Elem>
+            </Elem> */}
 
             <Space size="small">
               {preparedStackTrace && (

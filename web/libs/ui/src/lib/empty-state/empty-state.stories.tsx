@@ -137,7 +137,7 @@ export const SizeComparison: Story = {
             variant="primary"
             icon={<IconUpload />}
             title="Import data to get your project started"
-            description="Connect your cloud storage or upload files from your computer"
+            description="Upload files from your computer"
             actions={
               <>
                 {/* <Button variant="primary" look="filled" className="flex-1">
@@ -268,31 +268,31 @@ export const DataManagerImport: Story = {
     variant: "primary",
     icon: <IconUpload />,
     title: "Import data to get your project started",
-    description: "Connect your cloud storage or upload files from your computer",
-    additionalContent: (
-      <div className="flex items-center justify-center gap-base">
-        <Tooltip title="Amazon S3">
-          <div className="flex items-center justify-center p-2">
-            <IconCloudProviderS3 width={32} height={32} className="text-neutral-content-subtler" />
-          </div>
-        </Tooltip>
-        <Tooltip title="Google Cloud Storage">
-          <div className="flex items-center justify-center p-2">
-            <IconCloudProviderGCS width={32} height={32} className="text-neutral-content-subtler" />
-          </div>
-        </Tooltip>
-        <Tooltip title="Azure Blob Storage">
-          <div className="flex items-center justify-center p-2">
-            <IconCloudProviderAzure width={32} height={32} className="text-neutral-content-subtler" />
-          </div>
-        </Tooltip>
-        <Tooltip title="Redis Storage">
-          <div className="flex items-center justify-center p-2">
-            <IconCloudProviderRedis width={32} height={32} className="text-neutral-content-subtler" />
-          </div>
-        </Tooltip>
-      </div>
-    ),
+    description: "Upload files from your computer",
+    // additionalContent: (
+    //   <div className="flex items-center justify-center gap-base">
+    //     <Tooltip title="Amazon S3">
+    //       <div className="flex items-center justify-center p-2">
+    //         <IconCloudProviderS3 width={32} height={32} className="text-neutral-content-subtler" />
+    //       </div>
+    //     </Tooltip>
+    //     <Tooltip title="Google Cloud Storage">
+    //       <div className="flex items-center justify-center p-2">
+    //         <IconCloudProviderGCS width={32} height={32} className="text-neutral-content-subtler" />
+    //       </div>
+    //     </Tooltip>
+    //     <Tooltip title="Azure Blob Storage">
+    //       <div className="flex items-center justify-center p-2">
+    //         <IconCloudProviderAzure width={32} height={32} className="text-neutral-content-subtler" />
+    //       </div>
+    //     </Tooltip>
+    //     <Tooltip title="Redis Storage">
+    //       <div className="flex items-center justify-center p-2">
+    //         <IconCloudProviderRedis width={32} height={32} className="text-neutral-content-subtler" />
+    //       </div>
+    //     </Tooltip>
+    //   </div>
+    // ),
     actions: (
       <>
         {/* <Button variant="primary" look="filled" className="flex-1">

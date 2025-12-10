@@ -26,6 +26,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from projects.models import Project
+from projects.functions.user_batch_assignment import get_or_create_user_assignment
 from projects.serializers import ProjectSerializer
 from rest_framework import generics, viewsets
 from rest_framework.decorators import action
@@ -330,8 +331,18 @@ class TaskListAPI(generics.ListCreateAPIView):
             'annotations': all_fields,
         }
 
-    def get_task_queryset(self, request, prepare_params):
-        return Task.prepared.only_filtered(prepare_params=prepare_params)
+    def get_task_queryset(self, request, prepare_params, project):
+        """
+        Build the base queryset for Data Manager tasks and, if per-user batching
+        is enabled on the project, restrict it to the current user's assigned batch.
+        """
+        queryset = Task.prepared.only_filtered(prepare_params=prepare_params)
+
+        assignment = get_or_create_user_assignment(request.user, project)
+        if assignment is not None:
+            queryset = queryset.filter(id__in=assignment.tasks.values_list('id', flat=True))
+
+        return queryset
 
     @staticmethod
     def prefetch(queryset):
@@ -363,7 +374,7 @@ class TaskListAPI(generics.ListCreateAPIView):
             return Response({'detail': 'Neither project nor view id specified'}, status=404)
         # get prepare params (from view or from payload directly)
         prepare_params = get_prepare_params(request, project)
-        queryset = self.get_task_queryset(request, prepare_params)
+        queryset = self.get_task_queryset(request, prepare_params, project)
 
         # paginated tasks
         page = self.paginate_queryset(queryset)

@@ -18,8 +18,32 @@ import { FF_LSDV_E_297, isFF } from "../../utils/feature-flags";
 import { createURL } from "../../components/HeidiTips/utils";
 import { useCurrentUser } from "../../providers/CurrentUser";
 
-const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, setDescription, show = true, challengeId, setChallengeId, round, setRound }) =>
-  !show ? null : (
+const ProjectName = ({
+  name,
+  setName,
+  onSaveName,
+  onSubmit,
+  error,
+  description,
+  setDescription,
+  show = true,
+  challengeId,
+  setChallengeId,
+  round,
+  setRound,
+  selectedChallenge,
+  onChallengeSelect,
+  challenges,
+  challengesLoading,
+  perUserBatchSize,
+  setPerUserBatchSize,
+}) => {
+  const hasChallengeOptions = challenges && challenges.length > 0;
+  const lockFields = challengesLoading || hasChallengeOptions;
+
+  if (!show) return null;
+
+  return (
     <form
       className={cn("project-name")}
       onSubmit={(e) => {
@@ -27,6 +51,30 @@ const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, 
         onSubmit();
       }}
     >
+      {(challengesLoading || hasChallengeOptions) ?
+          <div className="w-full flex flex-col gap-2">
+            <label className="w-full" htmlFor="challenge_select">
+              Select Quest
+            </label>
+            <Select
+              id="challenge_select"
+              name="challenge_select"
+              placeholder={challengesLoading ? "Loading quests..." : "Select a quest"}
+              options={challenges.map((challenge) => ({
+                label: challenge.title + " - Round " + challenge.round,
+                value: challenge.id,
+                description: challenge.description,
+              }))}
+              value={selectedChallenge}
+              onChange={onChallengeSelect}
+              // triggerClassName="project-title w-full p-[20px]"
+              triggerClassName="!flex-1"
+              dataTestid="challenge-select"
+              disabled={challengesLoading}
+            />
+          </div>
+        : null
+      }
       <div className="w-full flex flex-col gap-2">
         <label className="w-full" htmlFor="project_name">
           Project Name
@@ -38,6 +86,7 @@ const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, 
           onChange={(e) => setName(e.target.value)}
           onBlur={onSaveName}
           className="project-title w-full"
+          readOnly={lockFields}
         />
         {error && <span className="-mt-1 text-negative-content">{error}</span>}
       </div>
@@ -54,69 +103,96 @@ const ProjectName = ({ name, setName, onSaveName, onSubmit, error, description, 
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           className="project-description w-full"
+          readOnly={lockFields}
         />
       </div>
       <div className="w-full flex flex-col gap-2">
-        <label className="w-full" htmlFor="project_challenge_id">
-          Challenge Id
+        <label className="w-full" htmlFor="per_user_batch_size">
+          Per-user batch size
         </label>
-        <TextArea
-          name="challenge_id"
-          id="project_challenge_id"
-          placeholder="Challenge ID of Lunor Quest"
-          rows="4"
-          style={{ minHeight: 100 }}
-          value={challengeId}
-          onChange={(e) => setChallengeId(e.target.value)}
-          className="project-description w-full"
-          required={true}
+        <Select
+          id="per_user_batch_size"
+          name="per_user_batch_size"
+          placeholder="Select batch size"
+          options={[
+            { label: "All", value: 0 },
+            { label: "10", value: 10 },
+            { label: "20", value: 20 },
+            { label: "30", value: 30 },
+            { label: "50", value: 50 },
+          ]}
+          value={perUserBatchSize}
+          onChange={(v) => setPerUserBatchSize(Number(v) || 0)}
+          triggerClassName="!flex-1"
         />
       </div>
-      <div className="w-full flex flex-col gap-2">
-        <label className="w-full" htmlFor="round">
-          Round
-        </label>
-        <TextArea
-          name="round"
-          id="project_round"
-          placeholder="Round number of the challenge"
-          rows="4"
-          style={{ minHeight: 100 }}
-          value={round}
-          onChange={(e) => setRound(e.target.value)}
-          className="project-description w-full"
-          required={true}
-        />
-      </div>
+      {!lockFields && (
+        <>
+          <div className="w-full flex flex-col gap-2">
+            <label className="w-full" htmlFor="project_challenge_id">
+              Challenge Id
+            </label>
+            <TextArea
+              name="challenge_id"
+              id="project_challenge_id"
+              placeholder="Challenge ID of Lunor Quest"
+              rows="4"
+              style={{ minHeight: 100 }}
+              value={challengeId}
+              onChange={(e) => setChallengeId(e.target.value)}
+              className="project-description w-full"
+              required={true}
+            />
+          </div>
+          <div className="w-full flex flex-col gap-2">
+            <label className="w-full" htmlFor="round">
+              Round
+            </label>
+            <TextArea
+              name="round"
+              id="project_round"
+              placeholder="Round number of the challenge"
+              rows="4"
+              style={{ minHeight: 100 }}
+              value={round}
+              onChange={(e) => setRound(e.target.value)}
+              className="project-description w-full"
+              required={true}
+            />
+          </div>
+        </>
+      )}
       {isFF(FF_LSDV_E_297) && (
-        <div className="w-full flex flex-col gap-2">
-          <label>
-            Workspace
-            <EnterpriseBadge className="ml-2" />
-          </label>
-          <Select placeholder="Select an option" disabled options={[]} triggerClassName="!flex-1" />
-          <Typography size="small" className="mt-tight mb-wider">
-            Simplify project management by organizing projects into workspaces.{" "}
-            <a
-              href={createURL(
-                "https://docs.humansignal.com/guide/manage_projects#Create-workspaces-to-organize-projects",
-                {
-                  experiment: "project_creation_dropdown",
-                  treatment: "simplify_project_management",
-                },
-              )}
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:no-underline text-[#EABE00]"
-            >
-              Learn more
-            </a>
-          </Typography>
-          <HeidiTips collection="projectCreation" />
-        </div>
+        // <div className="w-full flex flex-col gap-2">
+        //   <label>
+        //     Workspace
+        //     <EnterpriseBadge className="ml-2" />
+        //   </label>
+        //   <Select placeholder="Select an option" disabled options={[]} triggerClassName="!flex-1" />
+        //   {/* <Typography size="small" className="mt-tight mb-wider">
+        //     Simplify project management by organizing projects into workspaces.{" "}
+        //     <a
+        //       href={createURL(
+        //         "https://docs.humansignal.com/guide/manage_projects#Create-workspaces-to-organize-projects",
+        //         {
+        //           experiment: "project_creation_dropdown",
+        //           treatment: "simplify_project_management",
+        //         },
+        //       )}
+        //       target="_blank"
+        //       rel="noreferrer"
+        //       className="underline hover:no-underline text-[#EABE00]"
+        //     >
+        //       Learn more
+        //     </a>
+        //   </Typography> */}
+        //   {/* <HeidiTips collection="projectCreation" /> */}
+        // </div>
+        null
       )}
     </form>
   );
+};
 
 export const CreateProject = ({ onClose }) => {
   const { user } = useCurrentUser();
@@ -138,6 +214,88 @@ export const CreateProject = ({ onClose }) => {
   const [sample, setSample] = React.useState(null);
   const [challengeId, setChallengeId] = React.useState("");
   const [round, setRound] = React.useState("");
+  const [selectedChallenge, setSelectedChallenge] = React.useState("");
+  const [challenges, setChallenges] = React.useState([]);
+  const [challengesLoading, setChallengesLoading] = React.useState(false);
+  const [perUserBatchSize, setPerUserBatchSize] = React.useState(0);
+
+  React.useEffect(() => {
+    const GRAPHQL_ENDPOINT = process.env.GRAPHQL_ENDPOINT;
+    const orgId = user?.lunor_userId;
+
+    if (!GRAPHQL_ENDPOINT || !orgId) return;
+
+    const query = `
+      query FetchActiveChallengesForOrg($orgId: String!) {
+        fetchActiveChallengesForOrg(orgId: $orgId) {
+          id
+          round
+          summary
+          title
+        }
+      }
+    `;
+
+    const fetchChallenges = async () => {
+      setChallengesLoading(true);
+      try {
+        const response = await fetch(GRAPHQL_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query, variables: { orgId } }),
+        });
+
+        if (!response.ok) {
+          // eslint-disable-next-line no-console
+          console.error("Failed to fetch challenges", response.statusText);
+          setChallenges([]);
+          return;
+        }
+
+        const json = await response.json();
+        const fetched = json?.data?.fetchActiveChallengesForOrg ?? [];
+
+        setChallenges(
+          fetched.map((challenge) => ({
+            id: challenge.id,
+            title: challenge.title,
+            description: challenge.summary,
+            round: challenge.round,
+          })),
+        );
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error("Error fetching challenges", error);
+        setChallenges([]);
+      } finally {
+        setChallengesLoading(false);
+      }
+    };
+
+    fetchChallenges();
+  }, [user]);
+  const handleChallengeSelect = React.useCallback(
+    (value) => {
+      const selected = challenges.find((challenge) => challenge.id === value);
+
+      setSelectedChallenge(value);
+
+      if (selected) {
+        setName(selected.title ?? "");
+        setDescription(selected.description ?? "");
+        setChallengeId(selected.id ?? "");
+        setRound(selected.round ?? "");
+      } else {
+        setName("");
+        setDescription("");
+        setChallengeId("");
+        setRound("");
+      }
+    },
+    [challenges, setName, setDescription, setChallengeId, setRound],
+  );
 
   const setStep = React.useCallback((step) => {
     _setStep(step);
@@ -169,6 +327,12 @@ export const CreateProject = ({ onClose }) => {
     project && !name && setName(project.title);
   }, [project]);
 
+  React.useEffect(() => {
+    if (project) {
+      setPerUserBatchSize(project.per_user_batch_size ?? 0);
+    }
+  }, [project]);
+
   const projectBody = React.useMemo(
     () => ({
       title: name,
@@ -176,8 +340,9 @@ export const CreateProject = ({ onClose }) => {
       challenge_id: challengeId,
       round,
       label_config: project?.label_config ?? "<View></View>",
+      per_user_batch_size: perUserBatchSize === 0 ? null : perUserBatchSize,
     }),
-    [name, description, challengeId, round, project?.label_config],
+    [name, description, challengeId, round, project?.label_config, perUserBatchSize],
   );
 
   const onCreate = React.useCallback(async () => {
@@ -286,6 +451,12 @@ export const CreateProject = ({ onClose }) => {
           setChallengeId={setChallengeId}
           round={round}
           setRound={setRound}
+          selectedChallenge={selectedChallenge}
+          onChallengeSelect={handleChallengeSelect}
+          challenges={challenges}
+          challengesLoading={challengesLoading}
+          perUserBatchSize={perUserBatchSize}
+          setPerUserBatchSize={setPerUserBatchSize}
         />
         <ImportPage
           project={project}

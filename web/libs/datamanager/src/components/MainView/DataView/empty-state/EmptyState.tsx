@@ -136,7 +136,7 @@ const renderEmptyStateLayout = ({
 // Storage provider icons component
 const StorageProviderIcons = () => (
   <div className="flex items-center justify-center gap-base mb-wide" data-testid="dm-storage-provider-icons">
-    <Tooltip title="Amazon S3">
+    {/* <Tooltip title="Amazon S3">
       <div className="flex items-center justify-center p-2" aria-label="Amazon S3">
         <IconCloudProviderS3 width={32} height={32} className="text-neutral-content-subtler" />
       </div>
@@ -155,7 +155,7 @@ const StorageProviderIcons = () => (
       <div className="flex items-center justify-center p-2" aria-label="Redis Storage">
         <IconCloudProviderRedis width={32} height={32} className="text-neutral-content-subtler" />
       </div>
-    </Tooltip>
+    </Tooltip> */}
   </div>
 );
 
@@ -167,7 +167,7 @@ const DocumentationLink = () => {
 
   return (
     <Typography variant="label" size="small" className="text-primary-link hover:underline">
-      <a
+      {/* <a
         href={getDocsUrl("guide/tasks")}
         target="_blank"
         rel="noopener noreferrer"
@@ -177,7 +177,7 @@ const DocumentationLink = () => {
         See docs on importing data
         <span className="sr-only"> (opens in a new tab)</span>
         <IconExternal width={20} height={20} />
-      </a>
+      </a> */}
     </Typography>
   );
 };
@@ -288,7 +288,7 @@ export const EmptyState: FC<EmptyStateProps> = ({
   return renderEmptyStateLayout({
     icon: <IconUpload style={{ display: "none" }} />,
     title: "Import data to get your project started",
-    description: "Connect your cloud storage or upload files from your computer",
+    description: "Upload files from your computer",
     testId: "empty-state-label",
     ariaLabelledBy: "dm-empty-title",
     ariaDescribedBy: "dm-empty-desc",

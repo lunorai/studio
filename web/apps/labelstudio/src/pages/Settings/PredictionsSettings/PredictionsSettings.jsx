@@ -69,7 +69,7 @@ export const PredictionsSettings = () => {
               footer={
                 !window.APP_SETTINGS?.whitelabel_is_active && (
                   <Typography variant="label" size="small" className="text-primary-link">
-                    <a
+                    {/* <a
                       href="https://labelstud.io/guide/predictions"
                       target="_blank"
                       rel="noopener noreferrer"
@@ -79,7 +79,7 @@ export const PredictionsSettings = () => {
                     >
                       Learn more
                       <IconExternal width={16} height={16} />
-                    </a>
+                    </a> */}
                   </Typography>
                 )
               }

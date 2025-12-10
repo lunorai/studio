@@ -132,7 +132,8 @@
     align-items: center;
 
     &:hover {
-      color: var(--color-negative-border);
+      cursor: pointer;
+      color: white;
     }
   }
 

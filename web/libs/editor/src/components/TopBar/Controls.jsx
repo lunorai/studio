@@ -40,9 +40,23 @@ export const Controls = controlsInjector(
 
     const [isInProgress, setIsInProgress] = useState(false);
 
+    // Check if user is organization owner/admin account
+    const isOrgAdminAccount = store.user?.activeOrganizationMeta?.email && store.user?.email === store.user?.activeOrganizationMeta?.email;
+
     // const isReady = store.annotationStore.selected.objects.every(object => object.isReady === undefined || object.isReady);
-    const disabled = !editable || store.isSubmitting || historySelected || isInProgress; // || !isReady;
+    const disabled = !editable || store.isSubmitting || historySelected || isInProgress || isOrgAdminAccount; // || !isReady;
     const submitDisabled = store.hasInterface("annotations:deny-empty") && results.length === 0;
+    
+    // Organization admin accounts cannot submit or update annotations
+    if (isOrgAdminAccount) {
+      return (
+        <Block name="controls">
+          <div className="grid grid-flow-col auto-cols-fr gap-tight items-center">
+            <Elem name="org-admin-info">Organization admin accounts cannot submit or update annotations</Elem>
+          </div>
+        </Block>
+      );
+    }
 
     const buttonHandler = useCallback(
       async (e, callback, tooltipMessage) => {

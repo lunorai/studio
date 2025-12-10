@@ -452,7 +452,7 @@ export const ImportPage = ({
                       <dt>
                         <div className="flex items-center gap-1">
                           Video
-                          <Tooltip title="Video format support depends on your browser. Click to learn more.">
+                          {/* <Tooltip title="Video format support depends on your browser. Click to learn more.">
                             <a
                               href="https://labelstud.io/tags/video#Video-format"
                               target="_blank"
@@ -462,7 +462,7 @@ export const ImportPage = ({
                             >
                               <IconInfoOutline className="w-4 h-4 text-[#EABE00] hover:text-[#eabe001a]" />
                             </a>
-                          </Tooltip>
+                          </Tooltip> */}
                         </div>
                       </dt>
                       <dd>{supportedExtensions.video.join(", ")}</dd>
@@ -475,7 +475,7 @@ export const ImportPage = ({
                       <dt>PDF</dt>
                       <dd>{supportedExtensions.pdf.join(", ")}</dd>
                     </dl>
-                    <div className="tips">
+                    {/* <div className="tips">
                       <b>Important:</b>
                       <ul className="mt-2 ml-4 list-disc font-normal">
                         <li>
@@ -519,7 +519,7 @@ export const ImportPage = ({
                           .
                         </li>
                       </ul>
-                    </div>
+                    </div> */}
                   </div>
                 </label>
               </div>
