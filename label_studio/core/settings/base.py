@@ -143,27 +143,43 @@ CI = get_bool_env('CI', False)
 
 # Databases
 # https://docs.djangoproject.com/en/2.1/ref/settings/#databases
+def parse_database_url(db_url):
+    """Parse DATABASE_URL and return database config dict.
+    Supports format: postgresql://user:password@host:port/dbname
+    """
+    from urllib.parse import urlparse
+    parsed = urlparse(db_url)
+    return {
+        'ENGINE': 'django.db.backends.postgresql',
+        'USER': parsed.username or 'postgres',
+        'PASSWORD': parsed.password or 'postgres',
+        'NAME': parsed.path.lstrip('/') or 'postgres',
+        'HOST': parsed.hostname or 'localhost',
+        'PORT': parsed.port or 5432,
+    }
+
 DJANGO_DB_MYSQL = 'mysql'
 DJANGO_DB_SQLITE = 'sqlite'
 DJANGO_DB_POSTGRESQL = 'postgresql'
 DJANGO_DB = 'default'
 DATABASE_NAME_DEFAULT = os.path.join(BASE_DATA_DIR, 'label_studio.sqlite3')
 DATABASE_NAME = get_env('DATABASE_NAME', DATABASE_NAME_DEFAULT)
-DATABASES_ALL = {
-    DJANGO_DB_POSTGRESQL: {
+
+# Use DATABASE_URL if available, otherwise fall back to individual POSTGRE_* variables
+if get_env('DATABASE_URL'):
+    postgresql_config = parse_database_url(get_env('DATABASE_URL'))
+else:
+    postgresql_config = {
         'ENGINE': 'django.db.backends.postgresql',
         'USER': get_env('POSTGRE_USER', 'postgres'),
         'PASSWORD': get_env('POSTGRE_PASSWORD', 'postgres'),
         'NAME': get_env('POSTGRE_NAME', 'postgres'),
         'HOST': get_env('POSTGRE_HOST', 'localhost'),
         'PORT': int(get_env('POSTGRE_PORT', 5432)),
-        # 'ENGINE': 'django.db.backends.postgresql',
-        # 'USER': 'postgres',
-        # 'PASSWORD': 'VJ6kCxUG0dFMrJkg',
-        # 'NAME': 'postgres',
-        # 'HOST': 'db.zrsgixryjlammzksqgrv.supabase.co',
-        # 'PORT': 5432,
-    },
+    }
+
+DATABASES_ALL = {
+    DJANGO_DB_POSTGRESQL: postgresql_config,
     DJANGO_DB_MYSQL: {
         'ENGINE': 'django.db.backends.mysql',
         'USER': get_env('MYSQL_USER', 'root'),

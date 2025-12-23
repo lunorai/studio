@@ -33,6 +33,7 @@ services:
       - db
     environment:
       - DJANGO_DB=${DJANGO_DB}
+      - DATABASE_URL=${DATABASE_URL}
       - POSTGRE_NAME=postgres
       - POSTGRE_USER=postgres
       - POSTGRE_PASSWORD=${POSTGRE_PASSWORD}

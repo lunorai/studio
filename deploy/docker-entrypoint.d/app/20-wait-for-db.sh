@@ -2,6 +2,18 @@
 
 set -e ${DEBUG:+-x}
 
+function parse_database_url() {
+  local db_url=$1
+  # Parse DATABASE_URL format: postgresql://user:password@host:port/dbname
+  if [[ $db_url =~ ^postgresql://([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+)$ ]]; then
+    export POSTGRE_USER="${BASH_REMATCH[1]}"
+    export POSTGRE_PASSWORD="${BASH_REMATCH[2]}"
+    export POSTGRE_HOST="${BASH_REMATCH[3]}"
+    export POSTGRE_PORT="${BASH_REMATCH[4]}"
+    export POSTGRE_NAME="${BASH_REMATCH[5]}"
+  fi
+}
+
 function copy_and_export() {
   dest_dir=$OPT_DIR/_pg_ssl_certs
   mkdir -p $dest_dir
@@ -62,6 +74,10 @@ sys.exit(0)
 END
 }
 
+# Parse DATABASE_URL if provided
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  parse_database_url "${DATABASE_URL}"
+fi
 
 if [[ -n "${POSTGRE_HOST:-}" ]]; then
   postgres_ssl_setup
