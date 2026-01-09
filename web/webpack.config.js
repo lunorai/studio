@@ -29,7 +29,8 @@ const LOCAL_ENV = {
   NODE_ENV: mode,
   CSS_PREFIX: css_prefix,
   RELEASE_NAME: RELEASE,
-  GRAPHQL_ENDPOINT: process.env.GRAPHQL_ENDPOINT || "https://feat.100protocol.com/graphql/",
+  // GRAPHQL_ENDPOINT: process.env.GRAPHQL_ENDPOINT || "https://feat.100protocol.com",
+  GRAPHQL_ENDPOINT: process.env.GRAPHQL_ENDPOINT || "http://localhost:4000/graphql",
 };
 
 const BUILD = {
