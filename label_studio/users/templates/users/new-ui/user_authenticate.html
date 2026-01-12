@@ -8,12 +8,12 @@
       {% if error %}
         <h2 style="font-size:1.5rem;margin-bottom:16px;color:var(--heading-color);">Authentication</h2>
         {% if missing_token %}
-          <!-- <p>Please login to <a href="https://app.lunor.quest" target="_blank" rel="noopener">Lunor Quest</a> and then try to submit.</p> -->
           <p style="font-size:1rem;line-height:1.6;color:var(--text-color);">
-            Sign in to 
-            <a href="https://app.lunor.quest" target="_blank" rel="noopener" style="color:#EABE00;font-weight:500;text-decoration:none;">Lunor Quest</a> 
-            and join the competition. Use <strong>Submit Your Solution</strong> there to be auto-logged into Lunor Studio.
+            Redirecting to Lunor...
           </p>
+          <script nonce="{{request.csp_nonce}}">
+            window.location.href = "{{ lunor_quest_url }}";
+          </script>
         {% else %}
         <p style="color:#d33;font-size:1rem;margin-top:8px;" class="error-text">{{ error|safe }}</p>
         {% endif %}

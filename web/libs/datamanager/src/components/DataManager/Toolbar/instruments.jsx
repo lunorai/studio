@@ -170,7 +170,7 @@ export const instruments = {
             const userId = app?.user?.lunor_userId ?? '';
 
             const runtimeGraphql = window.APP_SETTINGS?.graphql_endpoint && String(window.APP_SETTINGS.graphql_endpoint);
-            const graphqlEndpoint = runtimeGraphql || process.env.GRAPHQL_ENDPOINT || "https://dev.100protocol.com/";
+            const graphqlEndpoint = runtimeGraphql || process.env.GRAPHQL_ENDPOINT || "https://feat.100protocol.com/";
             // GraphQL query to request an upload URL to R2
             const gqlQuery = `query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {\n  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {\n    challengeId\n    round\n    submissionId\n    maxConcurrentUploadLimit\n    urlArr { url key }\n  }\n}`;
 
@@ -183,7 +183,7 @@ export const instruments = {
                 query: gqlQuery,
                 variables: { challengeId, userId, round, filename },
               }),
-              credentials: "include",
+              // credentials: "include",
             });
             if (!gqlResp.ok) throw new Error(`GraphQL ${gqlResp.status}`);
             const gqlJson = await gqlResp.json();
@@ -212,7 +212,7 @@ export const instruments = {
             const updateResp = await fetch(graphqlEndpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              credentials: "include",
+              // credentials: "include",
               body: JSON.stringify({
                 query: updateMutation,
                 variables: {

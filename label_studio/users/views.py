@@ -228,6 +228,7 @@ def user_authenticate(request):
     token = request.GET.get('token')
     debug_steps = []
     debug_steps.append('Page loaded')
+    lunor_quest_url = getattr(settings, 'LUNOR_QUEST_URL', None) or os.getenv('LUNOR_QUEST_URL', 'https://app.lunor.quest')
     context = {
         'next': quote(next_page),
         'status': 'Authenticating from Lunor…',
@@ -238,11 +239,12 @@ def user_authenticate(request):
         'jwt_header': None,
         'using_jwt': False,
         'auth_page': True,
+        'lunor_quest_url': lunor_quest_url,
     }
 
     if not token:
         debug_steps.append('No token in query string')
-        context['error'] = 'Please login to Lunor Quest url https://app.lunor.quest and then try again.'
+        context['error'] = f'Please login to Lunor Quest url {lunor_quest_url} and then try again.'
         context['missing_token'] = True
         return render(request, 'users/new-ui/user_authenticate.html', context)
 
@@ -328,13 +330,13 @@ def user_authenticate(request):
 
     if not email:
         debug_steps.append('Email missing in token payload')
-        context['error'] = 'Email is missing. Please update your profile email in <a href="https://app.lunor.quest" target="_blank">Lunor Quest</a>.'
+        context['error'] = f'Email is missing. Please update your profile email in <a href="{lunor_quest_url}" target="_blank">Lunor Quest</a>.'
         return render(request, 'users/new-ui/user_authenticate.html', context)
 
     # 🚨 Strict requirement: lunor_userId must exist
     if not lunor_userId:
         debug_steps.append('Lunor userId missing in token payload')
-        context['error'] = 'Your Lunor ID is required for login. Please re-login from <a href="https://app.lunor.quest" target="_blank">Lunor Quest</a>.'
+        context['error'] = f'Your Lunor ID is required for login. Please re-login from <a href="{lunor_quest_url}" target="_blank">Lunor Quest</a>.'
         return render(request, 'users/new-ui/user_authenticate.html', context)
 
     User = get_user_model()
