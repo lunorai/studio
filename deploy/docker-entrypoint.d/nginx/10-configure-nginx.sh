@@ -1,5 +1,3 @@
-# ../common/10-configure-nginx.sh
-
 #!/bin/sh
 set -e ${DEBUG:+-x}
 

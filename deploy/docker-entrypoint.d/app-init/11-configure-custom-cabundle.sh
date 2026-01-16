@@ -1,5 +1,3 @@
-# ../common/11-configure-custom-cabundle.sh
-
 #!/bin/bash
 
 set -e ${DEBUG:+-x}
