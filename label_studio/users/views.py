@@ -328,6 +328,14 @@ def user_authenticate(request):
     email = (payload.get(email_claim) or (payload.get('sub') if subject_as_email else '') or '').lower()
     lunor_userId = payload.get(username_claim) or payload.get('preferred_username') or payload.get('username')
 
+    # Check for projectId in token and set redirect accordingly
+    project_id = payload.get('projectId')
+    if project_id:
+        next_page = f'/projects/{project_id}/data'
+        context['next'] = quote(next_page)
+        context['redirect'] = next_page
+    # else keep the default next_page
+
     if not email:
         debug_steps.append('Email missing in token payload')
         context['error'] = f'Email is missing. Please update your profile email in <a href="{lunor_quest_url}" target="_blank">Lunor Quest</a>.'

@@ -356,6 +356,44 @@ export const CreateProject = ({ onClose }) => {
 
     if (response === null) return;
 
+    // Call GraphQL mutation to update annotation URL
+    try {
+      const runtimeGraphql = window.APP_SETTINGS?.graphql_endpoint && String(window.APP_SETTINGS.graphql_endpoint);
+      const graphqlEndpoint = runtimeGraphql || process.env.GRAPHQL_ENDPOINT || "https://feat.lunor.ai/";
+      const annotationUrl = process.env.LABEL_STUDIO_HOST || "https://stdev.lunor.ai/";
+
+      const mutation = `mutation UpdateAnnotationURL($challengeId: Int!, $round: Int!, $annotationUrl: String!, $projectId: String!) {
+        updateAnnotationURL(challengeId: $challengeId, round: $round, annotationUrl: $annotationUrl, projectId: $projectId)
+      }`;
+
+      const gqlResponse = await fetch(graphqlEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: mutation,
+          variables: {
+            challengeId: parseInt(challengeId),
+            round: parseInt(round),
+            annotationUrl: annotationUrl,
+            projectId: String(response.id),
+          },
+        }),
+      });
+
+      if (!gqlResponse.ok) {
+        console.error("Failed to update annotation URL:", gqlResponse.statusText);
+      } else {
+        const gqlJson = await gqlResponse.json();
+        if (gqlJson.errors) {
+          console.error("GraphQL errors:", gqlJson.errors);
+        }
+      }
+    } catch (error) {
+      console.error("Error calling updateAnnotationURL:", error);
+    }
+
     const imported = await finishUpload();
 
     if (!imported) return;

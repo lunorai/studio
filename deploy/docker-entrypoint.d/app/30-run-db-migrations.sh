@@ -1,5 +1,3 @@
-# ../common/30-run-db-migrations.sh
-
 #!/bin/sh
 set -e ${DEBUG:+-x}
 
