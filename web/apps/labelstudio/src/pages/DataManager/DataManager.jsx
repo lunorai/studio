@@ -67,7 +67,11 @@ export const DataManagerPage = ({ ...props }) => {
   const { project } = useProject();
   const setContextProps = useContextProps();
   const [crashed, setCrashed] = useState(false);
-  const [loading, setLoading] = useState(!window.DataManager || !window.LabelStudio);
+  // Keep loader visible until:
+  // - dependencies are loaded,
+  // - project is fetched,
+  // - and DataManager finishes async initialization (including /api/dm/columns).
+  const [loading, setLoading] = useState(true);
   const dataManagerRef = useRef();
   const projectId = project?.id;
 
@@ -77,6 +81,8 @@ export const DataManagerPage = ({ ...props }) => {
     if (!root.current) return;
     if (!project?.id) return;
     if (dataManagerRef.current) return;
+
+    setLoading(true);
 
     const mlBackends = await api.callApi("mlBackends", {
       params: { project: project.id },
@@ -91,6 +97,11 @@ export const DataManagerPage = ({ ...props }) => {
         project,
         autoAnnotation: isDefined(interactiveBacked),
       })));
+
+    // Wait for DM to finish its async init (createApp -> columns request, dynamic models, etc)
+    await new Promise((resolve) => {
+      dataManager.on("ready", resolve);
+    });
 
     Object.assign(window, { dataManager });
 
@@ -188,6 +199,7 @@ export const DataManagerPage = ({ ...props }) => {
     }
 
     setContextProps({ dmRef: dataManager });
+    setLoading(false);
   }, [projectId]);
 
   const destroyDM = useCallback(() => {
@@ -198,10 +210,34 @@ export const DataManagerPage = ({ ...props }) => {
   }, []);
 
   useEffect(() => {
-    Promise.all(dependencies)
-      .then(() => setLoading(false))
-      .then(init);
-  }, [init]);
+    let cancelled = false;
+
+    (async () => {
+      // Always show loader while bootstrapping the page; it will be hidden only
+      // when DM reports readiness (or when we don't have a project yet).
+      setLoading(true);
+
+      await Promise.all(dependencies);
+      if (cancelled) return;
+
+      // If project isn't fetched yet, keep loader visible until ProjectProvider populates it,
+      // then `init` will run (via effect below).
+      if (!project?.id) return;
+
+      await init();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dependencies, init, project?.id]);
+
+  useEffect(() => {
+    // When project arrives after the dependencies are already loaded, kick init again.
+    // This keeps loader visible during /api/projects/:id as well.
+    if (!project?.id) return;
+    init();
+  }, [project?.id, init]);
 
   useEffect(() => {
     // destroy the data manager when the component is unmounted

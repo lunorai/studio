@@ -122,5 +122,5 @@ services:
       - studio-ipv6
 
 networks:
-    studio-ipv6:
-      external: true
+  studio-ipv6:
+    external: true
