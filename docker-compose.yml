@@ -67,24 +67,39 @@
 #       - ${POSTGRES_DATA_DIR:-./postgres-data}:/var/lib/postgresql/data
 #       - ./deploy/pgsql/certs:/var/lib/postgresql/certs:ro
 
-# Prod Compose File
+# Multi-Environment Compose File
+# Supports DEV_ and PROD_ prefixed environment variables
+# Usage:
+#   DEV: docker-compose -p dev --env-file .env.dev up -d
+#   PROD: docker-compose -p prod --env-file .env.prod up -d
+# Or set COMPOSE_PROJECT_NAME and use env_file in compose
 
 services:
   nginx:
     build: .
-    image: ghcr.io/lunorai/studio:dev
+    image: ${COMPOSE_IMAGE:-ghcr.io/lunorai/studio:dev}
     restart: unless-stopped
-    ports:
-      - "80:8085"
-      - "443:8086"
+    # Ports removed - using domain-based routing via reverse proxy
+    # ports:
+    #   - "80:8085"
+    #   - "443:8086"
+    container_name: ${COMPOSE_PROJECT_NAME:-studio}-nginx
     depends_on:
       - app
+    # Optional: enable domain-based routing via a shared Traefik gateway (see docker-compose.gateway.yml)
+    labels:
+      - traefik.enable=${TRAEFIK_ENABLE:-false}
+      - traefik.docker.network=studio-ipv6
+      - traefik.http.routers.${TRAEFIK_ROUTER_NAME:-studio}.rule=Host(`${TRAEFIK_HOST}`)
+      - traefik.http.routers.${TRAEFIK_ROUTER_NAME:-studio}.entrypoints=websecure
+      - traefik.http.routers.${TRAEFIK_ROUTER_NAME:-studio}.tls=true
+      - traefik.http.services.${TRAEFIK_ROUTER_NAME:-studio}.loadbalancer.server.port=8085
     environment:
-      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-https://stdev.lunor.ai}
+      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST}
       - NGINX_SSL_CERT=/certs/cert.pem
       - NGINX_SSL_CERT_KEY=/certs/cert.key
     volumes:
-      - ./mydata:/label-studio/data:rw
+      - ${DATA_DIR:-./mydata}:/label-studio/data:rw
       - ./deploy/nginx/certs:/certs:ro
     #   Optional: Override nginx default conf
     #      - ./deploy/my.conf:/etc/nginx/nginx.conf
@@ -96,27 +111,28 @@ services:
     stdin_open: true
     tty: true
     build: .
-    image: ghcr.io/lunorai/studio:dev
+    image: ${COMPOSE_IMAGE:-ghcr.io/lunorai/studio:dev}
     restart: unless-stopped
+    container_name: ${COMPOSE_PROJECT_NAME:-studio}-app
     expose:
       - "8000"
     # depends_on:
       # - db
     environment:
       - DJANGO_DB=${DJANGO_DB}
-      - POSTGRE_NAME=postgres
-      - POSTGRE_USER=postgres
+      - POSTGRE_NAME=${POSTGRE_NAME:-postgres}
+      - POSTGRE_USER=${POSTGRE_USER:-postgres}
       - POSTGRE_PASSWORD=${POSTGRE_PASSWORD}
       - POSTGRE_PORT=${POSTGRE_PORT}
       - POSTGRE_HOST=${POSTGRE_HOST}
-      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
+      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST}
       - LUNOR_JWT_SECRET=${LUNOR_JWT_SECRET}
       - JSON_LOG=1
       - GRAPHQL_ENDPOINT=${GRAPHQL_ENDPOINT}
       - LUNOR_QUEST_URL=${LUNOR_QUEST_URL}
     #      - LOG_LEVEL=DEBUG
     volumes:
-      - ./mydata:/label-studio/data:rw
+      - ${DATA_DIR:-./mydata}:/label-studio/data:rw
     command: label-studio-uwsgi
     networks:
       - studio-ipv6
