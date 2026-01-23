@@ -43,6 +43,10 @@ class PrepareParams(BaseModel):
     filters: Optional[Filters] = None
     data: Optional[dict] = None
     request: Optional[Any] = None
+    project_instance: Optional[Any] = None
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class CustomEnum(Enum):

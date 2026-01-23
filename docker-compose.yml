@@ -2,49 +2,44 @@
 # services:
 #   nginx:
 #     build: .
-#     # image: ghcr.io/lunorai/studio:main
 #     restart: unless-stopped
+#     container_name: studio_nginx_dev
+#     user: root
 #     ports:
 #       - "8080:8085"
-#       - "8081:8086"
 #     depends_on:
 #       - app
 #     environment:
-#       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
-#     #   Optional: Specify SSL termination certificate & key
-#     #   Just drop your cert.pem and cert.key into folder 'deploy/nginx/certs'
-#     #      - NGINX_SSL_CERT=/certs/cert.pem
-#     #      - NGINX_SSL_CERT_KEY=/certs/cert.key
+#       - LABEL_STUDIO_HOST=http://localhost:8080
 #     volumes:
 #       - ./mydata:/label-studio/data:rw
 #       - ./deploy/nginx/certs:/certs:ro
-#     #   Optional: Override nginx default conf
-#     #      - ./deploy/my.conf:/etc/nginx/nginx.conf
+#       # use custom nginx config
+#       - ./deploy/nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
 #     command: nginx
 
 #   app:
 #     stdin_open: true
 #     tty: true
 #     build: .
-#     # image: ghcr.io/lunorai/studio:main
+#     container_name: studio_app_dev
 #     restart: unless-stopped
 #     expose:
 #       - "8000"
 #     depends_on:
 #       - db
 #     environment:
-#       - DJANGO_DB=${DJANGO_DB}
-#       - POSTGRE_NAME=postgres
-#       - POSTGRE_USER=postgres
-#       - POSTGRE_PASSWORD=${POSTGRE_PASSWORD}
-#       - POSTGRE_PORT=${POSTGRE_PORT}
-#       - POSTGRE_HOST=${POSTGRE_HOST}
-#       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
-#       - LUNOR_JWT_SECRET=${LUNOR_JWT_SECRET}
-#       - JSON_LOG=1
-#       - GRAPHQL_ENDPOINT=${GRAPHQL_ENDPOINT}
-#       - LUNOR_QUEST_URL=${LUNOR_QUEST_URL}
-#     #      - LOG_LEVEL=DEBUG
+#       DJANGO_DB: ${DJANGO_DB}
+#       POSTGRE_NAME: postgres
+#       POSTGRE_USER: postgres
+#       POSTGRE_PASSWORD: ${POSTGRE_PASSWORD}
+#       POSTGRE_PORT: ${POSTGRE_PORT}
+#       POSTGRE_HOST: ${POSTGRE_HOST}
+#       LABEL_STUDIO_HOST: ${LABEL_STUDIO_HOST}
+#       LUNOR_JWT_SECRET: ${LUNOR_JWT_SECRET}
+#       # JSON_LOG: 1
+#       GRAPHQL_ENDPOINT: ${GRAPHQL_ENDPOINT}
+#       LUNOR_QUEST_URL: ${LUNOR_QUEST_URL}
 #     volumes:
 #       - ./mydata:/label-studio/data:rw
 #     command: label-studio-uwsgi
@@ -69,58 +64,136 @@
 
 # Prod Compose File
 
+# version: "3.9"
+
 services:
-  nginx:
-    build: .
-    image: ghcr.io/lunorai/studio:dev
+  # ==================================================
+  # PUBLIC REVERSE PROXY (ONLY SERVICE USING 80 / 443)
+  # ==================================================
+  proxy:
+    image: nginx:alpine
+    container_name: studio_proxy
     restart: unless-stopped
     ports:
-      - "80:8085"
-      - "443:8086"
-    depends_on:
-      - app
-    environment:
-      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-https://stdev.lunor.ai}
-      - NGINX_SSL_CERT=/certs/cert.pem
-      - NGINX_SSL_CERT_KEY=/certs/cert.key
+      - "80:80"
+      - "443:443"
     volumes:
-      - ./mydata:/label-studio/data:rw
+      - ./deploy/default.conf:/etc/nginx/nginx.conf:ro
       - ./deploy/nginx/certs:/certs:ro
-    #   Optional: Override nginx default conf
-    #      - ./deploy/my.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - nginx_dev
+      - nginx_prod
+    networks:
+      - studio_net
+
+  # =====================
+  # DEV – NGINX
+  # =====================
+  nginx_dev:
+    build: .
+    image: ghcr.io/lunorai/studio:dev
+    container_name: studio_nginx_dev
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    environment:
+      LABEL_STUDIO_HOST: ${DEV_LABEL_STUDIO_HOST}
+      NGINX_SSL_CERT: /certs/cert.pem
+      NGINX_SSL_CERT_KEY: /certs/cert.key
+      APP_HOST: studio_app_dev
+    volumes:
+      - ./mydata/dev:/label-studio/data:rw
+      - ./deploy/nginx/certs:/certs:ro
     command: nginx
     networks:
-      - studio-ipv6
+      - studio_net
 
-  app:
+  # =====================
+  # DEV – APP
+  # =====================
+  app_dev:
     stdin_open: true
     tty: true
     build: .
     image: ghcr.io/lunorai/studio:dev
+    container_name: studio_app_dev
     restart: unless-stopped
     expose:
       - "8000"
-    # depends_on:
-      # - db
+    env_file:
+      - .env.dev
     environment:
-      - DJANGO_DB=${DJANGO_DB}
-      - POSTGRE_NAME=postgres
-      - POSTGRE_USER=postgres
-      - POSTGRE_PASSWORD=${POSTGRE_PASSWORD}
-      - POSTGRE_PORT=${POSTGRE_PORT}
-      - POSTGRE_HOST=${POSTGRE_HOST}
-      - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
-      - LUNOR_JWT_SECRET=${LUNOR_JWT_SECRET}
-      - JSON_LOG=1
-      - GRAPHQL_ENDPOINT=${GRAPHQL_ENDPOINT}
-      - LUNOR_QUEST_URL=${LUNOR_QUEST_URL}
-    #      - LOG_LEVEL=DEBUG
+      DJANGO_DB: ${DJANGO_DB}
+      POSTGRE_NAME: postgres
+      POSTGRE_USER: postgres
+      POSTGRE_PASSWORD: ${DEV_POSTGRE_PASSWORD}
+      POSTGRE_PORT: ${DEV_POSTGRE_PORT}
+      POSTGRE_HOST: ${DEV_POSTGRE_HOST}
+      LABEL_STUDIO_HOST: ${DEV_LABEL_STUDIO_HOST}
+      LUNOR_JWT_SECRET: ${DEV_LUNOR_JWT_SECRET}
+      JSON_LOG: 1
+      GRAPHQL_ENDPOINT: ${DEV_GRAPHQL_ENDPOINT}
+      LUNOR_QUEST_URL: ${DEV_LUNOR_QUEST_URL}
     volumes:
-      - ./mydata:/label-studio/data:rw
+      - ./mydata/dev:/label-studio/data:rw
     command: label-studio-uwsgi
     networks:
-      - studio-ipv6
+      - studio_net
+
+  # =====================
+  # PROD – NGINX
+  # =====================
+  nginx_prod:
+    build: .
+    image: ghcr.io/lunorai/studio:main
+    container_name: studio_nginx_prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      LABEL_STUDIO_HOST: ${PROD_LABEL_STUDIO_HOST}
+      NGINX_SSL_CERT: /certs/cert.pem
+      NGINX_SSL_CERT_KEY: /certs/cert.key
+      APP_HOST: studio_app_prod
+    volumes:
+      - ./mydata/prod:/label-studio/data:rw
+      - ./deploy/nginx/certs:/certs:ro
+    command: nginx
+    networks:
+      - studio_net
+
+  # =====================
+  # PROD – APP
+  # =====================
+  app_prod:
+    stdin_open: true
+    tty: true
+    build: .
+    image: ghcr.io/lunorai/studio:main
+    container_name: studio_app_prod
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - .env.prod
+    environment:
+      DJANGO_DB: ${DJANGO_DB}
+      POSTGRE_NAME: postgres
+      POSTGRE_USER: postgres
+      POSTGRE_PASSWORD: ${PROD_POSTGRE_PASSWORD}
+      POSTGRE_PORT: ${PROD_POSTGRE_PORT}
+      POSTGRE_HOST: ${PROD_POSTGRE_HOST}
+      LABEL_STUDIO_HOST: ${PROD_LABEL_STUDIO_HOST}
+      LUNOR_JWT_SECRET: ${PROD_LUNOR_JWT_SECRET}
+      JSON_LOG: 1
+      GRAPHQL_ENDPOINT: ${PROD_GRAPHQL_ENDPOINT}
+      LUNOR_QUEST_URL: ${PROD_LUNOR_QUEST_URL}
+    volumes:
+      - ./mydata/prod:/label-studio/data:rw
+    command: label-studio-uwsgi
+    networks:
+      - studio_net
 
 networks:
-  studio-ipv6:
-    external: true
+  studio_net:
+    driver: bridge
