@@ -81,32 +81,10 @@ services:
       - ./deploy/default.conf:/etc/nginx/nginx.conf:ro
       - ./deploy/nginx/certs:/certs:ro
     depends_on:
-      - nginx_dev
-      - nginx_prod
+      - app_dev
+      - app_prod
     networks:
-      - studio_net
-
-  # =====================
-  # DEV – NGINX
-  # =====================
-  nginx_dev:
-    build: .
-    image: ghcr.io/lunorai/studio:dev
-    container_name: studio_nginx_dev
-    restart: unless-stopped
-    env_file:
-      - .env.dev
-    environment:
-      LABEL_STUDIO_HOST: ${DEV_LABEL_STUDIO_HOST}
-      NGINX_SSL_CERT: /certs/cert.pem
-      NGINX_SSL_CERT_KEY: /certs/cert.key
-      APP_HOST: studio_app_dev
-    volumes:
-      - ./mydata/dev:/label-studio/data:rw
-      - ./deploy/nginx/certs:/certs:ro
-    command: nginx
-    networks:
-      - studio_net
+      - studio-ipv6
 
   # =====================
   # DEV – APP
@@ -120,8 +98,6 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
-    env_file:
-      - .env.dev
     environment:
       DJANGO_DB: ${DJANGO_DB}
       POSTGRE_NAME: postgres
@@ -138,29 +114,7 @@ services:
       - ./mydata/dev:/label-studio/data:rw
     command: label-studio-uwsgi
     networks:
-      - studio_net
-
-  # =====================
-  # PROD – NGINX
-  # =====================
-  nginx_prod:
-    build: .
-    image: ghcr.io/lunorai/studio:main
-    container_name: studio_nginx_prod
-    restart: unless-stopped
-    env_file:
-      - .env.prod
-    environment:
-      LABEL_STUDIO_HOST: ${PROD_LABEL_STUDIO_HOST}
-      NGINX_SSL_CERT: /certs/cert.pem
-      NGINX_SSL_CERT_KEY: /certs/cert.key
-      APP_HOST: studio_app_prod
-    volumes:
-      - ./mydata/prod:/label-studio/data:rw
-      - ./deploy/nginx/certs:/certs:ro
-    command: nginx
-    networks:
-      - studio_net
+      - studio-ipv6
 
   # =====================
   # PROD – APP
@@ -174,8 +128,6 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
-    env_file:
-      - .env.prod
     environment:
       DJANGO_DB: ${DJANGO_DB}
       POSTGRE_NAME: postgres
@@ -192,8 +144,8 @@ services:
       - ./mydata/prod:/label-studio/data:rw
     command: label-studio-uwsgi
     networks:
-      - studio_net
+      - studio-ipv6
 
 networks:
-  studio_net:
-    driver: bridge
+  studio-ipv6:
+    external: true
