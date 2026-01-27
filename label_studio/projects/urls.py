@@ -6,6 +6,7 @@ from .api import (
     FinalSubmissionCheckAPI,
     FinalSubmissionCreateAPI,
     ProjectUserTasksAPI,
+    LunorSubmissionAssetsUploadAPI,
 )
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
@@ -74,4 +75,5 @@ urlpatterns = [
     path('api/templates/', include((_api_urlpatterns_templates, app_name), namespace='api-templates')),
     path('api/update-participants/', UpdateParticipantsAPI.as_view(), name='update-participants'),
     path('api/update-challenge-status/', UpdateChallengeStatusAPI.as_view(), name='update-challenge-status'),
+    path('api/lunor/submission-assets/upload/', LunorSubmissionAssetsUploadAPI.as_view(), name='lunor-submission-assets-upload'),
 ]

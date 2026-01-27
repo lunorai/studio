@@ -26,6 +26,7 @@ from core.utils.filterset_to_openapi_params import filterset_to_openapi_params
 from core.utils.io import find_dir, find_file, read_yaml
 from core.utils.serializer_to_openapi_params import serializer_to_openapi_params
 from data_manager.functions import filters_ordering_selected_items_exist, get_prepared_queryset
+from data_export.serializers import ExportDataSerializer
 from django.conf import settings
 from django.db import IntegrityError
 from django.db.models import F
@@ -59,6 +60,8 @@ from rest_framework.exceptions import ValidationError as RestValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
+from rest_framework import serializers
+import requests
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework.views import exception_handler
@@ -612,6 +615,210 @@ class FinalSubmissionCreateAPI(generics.GenericAPIView):
         )
         status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response({'id': obj.id, 'created': created}, status=status_code)
+
+
+class LunorSubmissionAssetsUploadSerializer(serializers.Serializer):
+    # Present for compatibility/future use; not sent to GraphQL (frontend doesn't send it).
+    lunor_submission_id = serializers.IntegerField(required=False, allow_null=True)
+    studio_project_id = serializers.IntegerField()
+    # Single numeric user id (same for Studio platform and Label Studio DB lookups)
+    studio_user_id = serializers.IntegerField()
+    # Lunor/Quest platform user id (GraphQL expects this as userId).
+    lunor_userId = serializers.CharField()
+    # Caller’s view of whether assets list should be updated; we also enforce server-side checks.
+    assets_list_check = serializers.BooleanField(required=False, default=True)
+
+
+class LunorSubmissionAssetsUploadAPI(APIView):
+    """
+    Server-side version of the "Final Submit" flow:
+    - Verify final submission exists for (project, user, challenge_id, round)
+    - Export CSV of annotations completed by that user for that project
+    - Request an upload URL via GraphQL, PUT the CSV, then call a GraphQL mutation with:
+      lunor_submission_id, studio_project_id, studio_user_id, assets_list_check (asset keys list)
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = LunorSubmissionAssetsUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        project_id = data["studio_project_id"]
+        studio_user_id = data["studio_user_id"]
+        lunor_user_id = data.get("lunor_userId")
+        lunor_submission_id = data.get("lunor_submission_id")
+
+        project = generics.get_object_or_404(Project, pk=project_id)
+        # GraphQL userId always comes from lunor_userId (studio_user_id is only for Label Studio DB/export)
+        graphql_user_id = str(lunor_user_id).strip()
+
+        user = generics.get_object_or_404(User, pk=studio_user_id)
+
+        # Enforce final submission existence check (note: this is the "one change" vs UI gating).
+        challenge_id = project.challenge_id if project.challenge_id not in ["", None] else None
+        round_value = project.round if project.round not in ["", None] else None
+        record = FinalSubmission.objects.filter(
+            project=project, user=user, challenge_id=challenge_id, round=round_value
+        ).first()
+        if not record:
+            return Response(
+                {"detail": "Final submission does not exist for this user/project/round."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Export CSV for this specific user's annotations
+        export_type = "CSV"
+        tasks_qs = Task.objects.filter(project=project).filter(annotations__completed_by=studio_user_id).distinct()
+        tasks = ExportDataSerializer(
+            tasks_qs.select_related("project").prefetch_related("annotations", "annotations__completed_by", "predictions"),
+            many=True,
+            expand=["drafts"],
+            context={"interpolate_key_frames": False},
+        ).data
+
+        # Filter annotation payload down to that user only
+        for task in tasks:
+            anns = task.get("annotations") or []
+            task["annotations"] = [a for a in anns if a.get("completed_by") == studio_user_id]
+
+        from data_export.models import DataExport  # local import to avoid heavy import at module load
+
+        export_file, _content_type, filename = DataExport.generate_export_file(
+            project,
+            tasks,
+            export_type,
+            download_resources=False,
+            request_args={},
+            hostname=request.build_absolute_uri("/"),
+        )
+        try:
+            export_file.seek(0)
+        except Exception:
+            pass
+        csv_bytes = export_file.read()
+
+        # GraphQL endpoint
+        runtime_graphql = getattr(settings, "GRAPHQL_ENDPOINT", None)
+        graphql_endpoint = (
+            runtime_graphql
+            or os.environ.get("GRAPHQL_ENDPOINT")
+            or "https://feat.100protocol.com/"
+        )
+
+        # 1) Get signed upload URL
+        gql_query = (
+            "query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {"
+            "  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {"
+            "    submissionId"
+            "    urlArr { url key }"
+            "  }"
+            "}"
+        )
+        if not challenge_id:
+            return Response(
+                {"detail": "Project has no challenge_id; cannot request upload URL."},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        gql_resp = requests.post(
+            graphql_endpoint,
+            json={
+                "query": gql_query,
+                "variables": {
+                    "challengeId": int(challenge_id),
+                    "userId": graphql_user_id,
+                    "round": int(round_value or 1),
+                    "filename": filename,
+                },
+            },
+            timeout=60,
+        )
+        if gql_resp.status_code >= 400:
+            return Response(
+                {"detail": f"GraphQL getAnnotationUploadUrl failed: {gql_resp.status_code}", "body": gql_resp.text},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        gql_json = gql_resp.json()
+        upload_info = (gql_json.get("data") or {}).get("getAnnotationUploadUrl") or {}
+        url_arr = upload_info.get("urlArr") or []
+        upload_url = (url_arr[0] or {}).get("url") if isinstance(url_arr, list) and url_arr else None
+        if not upload_url:
+            return Response(
+                {"detail": "No upload URL returned from GraphQL.", "graphql": gql_json},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # 2) Upload CSV
+        put_resp = requests.put(
+            upload_url,
+            data=csv_bytes,
+            headers={"Content-Type": "text/csv"},
+            timeout=120,
+        )
+        if put_resp.status_code >= 400:
+            return Response(
+                {"detail": f"Upload failed: {put_resp.status_code}", "body": put_resp.text},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # 3) Update asset list in GraphQL using the requested argument names
+        asset_keys = [item.get("key") for item in url_arr if isinstance(item, dict) and item.get("key")]
+        if not asset_keys:
+            return Response(
+                {"detail": "No asset keys returned from GraphQL urlArr."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Match frontend mutation signature/variables exactly.
+        update_mutation = (
+            "mutation UpdateSubmissionAssetList($submissionId: Int, $challengeId: Int, $round: Int, $userId: String!, $asset_list: [String!]!) {"
+            "  updateSubmissionAssetList("
+            "    submissionId: $submissionId"
+            "    challengeId: $challengeId"
+            "    round: $round"
+            "    userId: $userId"
+            "    asset_list: $asset_list"
+            "  )"
+            "}"
+        )
+        upd_resp = requests.post(
+            graphql_endpoint,
+            json={
+                "query": update_mutation,
+                "variables": {
+                    "submissionId": upload_info.get("submissionId"),
+                    "challengeId": int(challenge_id),
+                    "round": int(round_value or 1),
+                    # GraphQL expects Quest platform user id here
+                    "userId": graphql_user_id,
+                    "asset_list": asset_keys,
+                },
+            },
+            timeout=60,
+        )
+        if upd_resp.status_code >= 400:
+            return Response(
+                {"detail": f"GraphQL updateSubmissionAssetList failed: {upd_resp.status_code}", "body": upd_resp.text},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response(
+            {
+                "success": True,
+                "project_id": project_id,
+                "studio_user_id": studio_user_id,
+                "lunor_userId": lunor_user_id,
+                "graphql_userId": graphql_user_id,
+                "final_submission_id": record.id,
+                "lunor_submission_id": lunor_submission_id,
+                "assets_list_check": data.get("assets_list_check", True),
+                "uploaded_filename": filename,
+                "asset_keys": asset_keys,
+                "graphql_update_response": upd_resp.json() if upd_resp.headers.get("content-type", "").startswith("application/json") else upd_resp.text,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 # @method_decorator(
 #     name='get',
