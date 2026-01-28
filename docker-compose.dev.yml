@@ -1,0 +1,60 @@
+# Development Compose File - Deploy independently
+version: "3.9"
+
+services:
+  # ==================================================
+  # PUBLIC REVERSE PROXY (ONLY SERVICE USING 80 / 443)
+  # ==================================================
+  proxy:
+    image: nginx:alpine
+    container_name: studio_proxy_dev
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./deploy/default.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/certs:/certs:ro
+    depends_on:
+      - app
+    networks:
+      - studio-dev
+
+  # =====================
+  # DEV – APP
+  # =====================
+  app:
+    stdin_open: true
+    tty: true
+    build: .
+    image: ghcr.io/lunorai/studio:dev
+    container_name: studio_app_dev
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      DJANGO_DB: ${DJANGO_DB}
+      POSTGRE_NAME: postgres
+      POSTGRE_USER: postgres
+      POSTGRE_PASSWORD: ${POSTGRE_PASSWORD}
+      POSTGRE_PORT: ${POSTGRE_PORT}
+      POSTGRE_HOST: ${POSTGRE_HOST}
+      LABEL_STUDIO_HOST: ${LABEL_STUDIO_HOST}
+      LUNOR_JWT_SECRET: ${LUNOR_JWT_SECRET}
+      JSON_LOG: 1
+      GRAPHQL_ENDPOINT: ${GRAPHQL_ENDPOINT}
+      LUNOR_QUEST_URL: ${LUNOR_QUEST_URL}
+    volumes:
+      - ./mydata:/label-studio/data:rw
+    command: label-studio-uwsgi
+    networks:
+      - studio-dev
+
+networks:
+  studio-dev:
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+        - subnet: 2001:db8::/32
