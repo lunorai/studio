@@ -689,8 +689,8 @@ class LunorSubmissionAssetsUploadAPI(APIView):
             project,
             tasks,
             export_type,
-            download_resources=False,
-            request_args={},
+            False,  # download_resources
+            {},  # get_args
             hostname=request.build_absolute_uri("/"),
         )
         try:

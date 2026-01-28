@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            echo "TAG=prod" >> $GITHUB_OUTPUT
+            echo "TAG=main" >> $GITHUB_OUTPUT
           elif [ "${GITHUB_REF_NAME}" = "dev" ]; then
             echo "TAG=dev" >> $GITHUB_OUTPUT
           else
