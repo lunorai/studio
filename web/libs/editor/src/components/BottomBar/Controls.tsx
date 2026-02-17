@@ -6,7 +6,7 @@
 
 import { observer } from "mobx-react";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Button, ButtonGroup, type ButtonProps } from "@humansignal/ui";
 import { IconBan, IconChevronDown } from "@humansignal/icons";
@@ -77,9 +77,36 @@ export const Controls = controlsInjector<{ annotation: MSTAnnotation }>(
     const buttons: React.ReactNode[] = [];
 
     const [isInProgress, setIsInProgress] = useState(false);
+    const [hasFinalSubmissionByCurrentUser, setHasFinalSubmissionByCurrentUser] = useState(false);
     
     // Check if user is organization owner/admin account
     const isOrgAdminAccount = store.user?.activeOrganizationMeta?.email && store.user?.email === store.user?.activeOrganizationMeta?.email;
+
+    useEffect(() => {
+      let cancelled = false;
+      const projectFromStore = Number(store?.project?.id ?? null);
+      const projectFromSettings = Number((window as any)?.APP_SETTINGS?.project?.id ?? null);
+      const projectFromPath = Number((window.location.pathname.match(/\/projects\/(\d+)/)?.[1] ?? null));
+      const projectId = projectFromStore || projectFromSettings || projectFromPath;
+
+      if (!projectId || isOrgAdminAccount) {
+        setHasFinalSubmissionByCurrentUser(false);
+        return;
+      }
+
+      fetch(`/api/projects/${projectId}/final-submission/check/`, { credentials: "include" })
+        .then((resp) => (resp.ok ? resp.json() : Promise.reject(new Error(String(resp.status)))))
+        .then((json) => {
+          if (!cancelled) setHasFinalSubmissionByCurrentUser(Boolean(json?.exists));
+        })
+        .catch(() => {
+          if (!cancelled) setHasFinalSubmissionByCurrentUser(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [store?.project?.id, store?.user?.id, isOrgAdminAccount]);
     
     const disabled = !annotationEditable || store.isSubmitting || historySelected || isInProgress || isOrgAdminAccount;
     const submitDisabled = store.hasInterface("annotations:deny-empty") && results.length === 0;
@@ -248,7 +275,13 @@ export const Controls = controlsInjector<{ annotation: MSTAnnotation }>(
         );
       };
 
-      if (userGenerate || (store.explore && !userGenerate && store.hasInterface("submit"))) {
+      if (hasFinalSubmissionByCurrentUser) {
+        buttons.push(
+          <Elem name="org-admin-info" key="final-submission-info">
+            You have already submitted this task and cannot submit or update annotations
+          </Elem>,
+        );
+      } else if (userGenerate || (store.explore && !userGenerate && store.hasInterface("submit"))) {
         const title = submitDisabled ? EMPTY_SUBMIT_TOOLTIP : "Save results: [ Ctrl+Enter ]";
 
         buttons.push(

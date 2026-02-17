@@ -5,6 +5,27 @@ set -e ${DEBUG:+-x}
 # Redirect all scripts output + leaving stdout to container payload.
 exec 3>&1
 
+# Fix dangling symlinks (Windows git with core.symlinks=false)
+echo >&3 "=> Checking and fixing dangling symlinks..."
+SYMLINKS=(
+  "nginx/10-configure-nginx.sh:../common/10-configure-nginx.sh"
+  "app/11-configure-custom-cabundle.sh:../common/11-configure-custom-cabundle.sh"
+  "app/20-wait-for-db.sh:../common/20-wait-for-db.sh"
+  "app/30-run-db-migrations.sh:../common/30-run-db-migrations.sh"
+  "app-init/11-configure-custom-cabundle.sh:../common/11-configure-custom-cabundle.sh"
+  "app-init/20-wait-for-db.sh:../common/20-wait-for-db.sh"
+)
+for symlink in "${SYMLINKS[@]}"; do
+  IFS=':' read -r path target <<< "$symlink"
+  full_path="/label-studio/deploy/docker-entrypoint.d/$path"
+  if [ ! -L "$full_path" ] || [ ! -e "$full_path" ]; then
+    echo >&3 "=> Fixing symlink: $path"
+    rm -f "$full_path"
+    ln -s "$target" "$full_path"
+  fi
+done
+chmod +x /label-studio/deploy/docker-entrypoint.d/*/*.sh
+
 ENTRYPOINT_PATH=/label-studio/deploy/docker-entrypoint.d
 
 exec_entrypoint() {

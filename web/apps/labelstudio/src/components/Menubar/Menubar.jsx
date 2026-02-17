@@ -1,4 +1,11 @@
-import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { StaticContent } from "../../app/StaticContent/StaticContent";
 import {
   IconBook,
@@ -16,7 +23,10 @@ import {
 import { LSLogo } from "../../assets/images";
 import { Button, Userpic, ThemeToggle } from "@humansignal/ui";
 import { useConfig } from "../../providers/ConfigProvider";
-import { useContextComponent, useFixedLocation } from "../../providers/RoutesProvider";
+import {
+  useContextComponent,
+  useFixedLocation,
+} from "../../providers/RoutesProvider";
 import { useCurrentUser } from "../../providers/CurrentUser";
 import { cn } from "../../utils/bem";
 import { absoluteURL, isDefined } from "../../utils/helpers";
@@ -24,7 +34,10 @@ import { Breadcrumbs } from "../Breadcrumbs/Breadcrumbs";
 import { Dropdown } from "../Dropdown/Dropdown";
 import { Hamburger } from "../Hamburger/Hamburger";
 import { Menu } from "../Menu/Menu";
-import { VersionNotifier, VersionProvider } from "../VersionNotifier/VersionNotifier";
+import {
+  VersionNotifier,
+  VersionProvider,
+} from "../VersionNotifier/VersionNotifier";
 import "./Menubar.scss";
 import "./MenuContent.scss";
 import "./MenuSidebar.scss";
@@ -54,11 +67,25 @@ const RightContextMenu = ({ className, ...props }) => {
   );
 };
 
-export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSidebarToggle, onSidebarPin }) => {
+export const Menubar = ({
+  enabled,
+  defaultOpened,
+  defaultPinned,
+  children,
+  onSidebarToggle,
+  onSidebarPin,
+}) => {
   const menuDropdownRef = useRef();
   const useMenuRef = useRef();
   const { user, fetch, isInProgress } = useCurrentUser();
   const location = useFixedLocation();
+  const isOrganizationOwner =
+    Boolean(user?.isOwner) ||
+    (Boolean(user?.active_organization_meta?.email) &&
+      user?.email === user?.active_organization_meta?.email);
+  const isOrganizationAdmin =
+    user?.active_organization_membership?.role === "AD";
+  const canAccessOrganization = isOrganizationOwner || isOrganizationAdmin;
 
   const config = useConfig();
   const [sidebarOpened, setSidebarOpened] = useState(defaultOpened ?? false);
@@ -137,21 +164,23 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
     <div className={contentClass}>
       {enabled && (
         <div className={menubarClass}>
-          <Dropdown.Trigger dropdown={menuDropdownRef} closeOnClickOutside={!sidebarPinned}>
-          <div className={`${menubarClass.elem("trigger")} main-menu-trigger flex items-center gap-2`}>
-            <img
-              src="https://www.lunor.quest/assets/LogoSmall.png"
-              alt="Lunor Studio Logo"
-              className={`${menubarClass.elem("logo")} w-8 h-8`}
-            />
-            <span className="logo-name">
-              Lunor Studio
-            </span>
-            <div className="ml-auto">
-              <Hamburger opened={sidebarOpened} />
+          <Dropdown.Trigger
+            dropdown={menuDropdownRef}
+            closeOnClickOutside={!sidebarPinned}
+          >
+            <div
+              className={`${menubarClass.elem("trigger")} main-menu-trigger flex items-center gap-2`}
+            >
+              <img
+                src="https://www.lunor.quest/assets/LogoSmall.png"
+                alt="Lunor Studio Logo"
+                className={`${menubarClass.elem("logo")} w-8 h-8`}
+              />
+              <span className="logo-name">Lunor Studio</span>
+              <div className="ml-auto">
+                <Hamburger opened={sidebarOpened} />
+              </div>
             </div>
-          </div>
-
           </Dropdown.Trigger>
 
           <div className={menubarContext}>
@@ -197,12 +226,23 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
                   href={pages.AccountSettingsPage.path}
                 />
                 {/* <Menu.Item label="Dark Mode"/> */}
-                <Menu.Item icon={<IconDoor />} label="Log Out" href={absoluteURL("/logout")} data-external />
+                <Menu.Item
+                  icon={<IconDoor />}
+                  label="Log Out"
+                  href={absoluteURL("/logout")}
+                  data-external
+                />
                 {showNewsletterDot && (
                   <>
                     <Menu.Divider />
-                    <Menu.Item className={cn("newsletter-menu-item")} href={pages.AccountSettingsPage.path}>
-                      <span>Please check new notification settings in the Account & Settings page</span>
+                    <Menu.Item
+                      className={cn("newsletter-menu-item")}
+                      href={pages.AccountSettingsPage.path}
+                    >
+                      <span>
+                        Please check new notification settings in the Account &
+                        Settings page
+                      </span>
                       <span className={cn("newsletter-menu-badge")} />
                     </Menu.Item>
                   </>
@@ -212,7 +252,9 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
           >
             <div title={user?.email} className={menubarClass.elem("user")}>
               <Userpic user={user} isInProgress={isInProgress} />
-              {showNewsletterDot && <div className={menubarClass.elem("userpic-badge")} />}
+              {showNewsletterDot && (
+                <div className={menubarClass.elem("userpic-badge")} />
+              )}
             </div>
           </Dropdown.Trigger>
         </div>
@@ -224,15 +266,42 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
             <Dropdown
               ref={menuDropdownRef}
               onToggle={sidebarToggle}
-              onVisibilityChanged={() => window.dispatchEvent(new Event("resize"))}
+              onVisibilityChanged={() =>
+                window.dispatchEvent(new Event("resize"))
+              }
               visible={sidebarOpened}
-              className={[sidebarClass, sidebarClass.mod({ floating: !sidebarPinned })].join(" ")}
+              className={[
+                sidebarClass,
+                sidebarClass.mod({ floating: !sidebarPinned }),
+              ].join(" ")}
               style={{ width: 240 }}
             >
               <Menu>
-                {isFF(FF_HOMEPAGE) && <Menu.Item label="Home" to="/" icon={<IconHome />} data-external exact />}
-                <Menu.Item label="Projects" to="/projects" icon={<IconFolder />} data-external exact />
-                <Menu.Item label="Organization" to="/organization" icon={<IconPeople />} data-external exact />
+                {isFF(FF_HOMEPAGE) && (
+                  <Menu.Item
+                    label="Home"
+                    to="/"
+                    icon={<IconHome />}
+                    data-external
+                    exact
+                  />
+                )}
+                <Menu.Item
+                  label="Projects"
+                  to="/projects"
+                  icon={<IconFolder />}
+                  data-external
+                  exact
+                />
+                {canAccessOrganization && (
+                  <Menu.Item
+                    label="Organization"
+                    to="/organization"
+                    icon={<IconPeople />}
+                    data-external
+                    exact
+                  />
+                )}
 
                 <Menu.Spacer />
 
@@ -277,7 +346,11 @@ export const Menubar = ({ enabled, defaultOpened, defaultPinned, children, onSid
           )}
 
           <MenubarContext.Provider value={providerValue}>
-            <div className={contentClass.elem("content").mod({ withSidebar: sidebarPinned && sidebarOpened })}>
+            <div
+              className={contentClass
+                .elem("content")
+                .mod({ withSidebar: sidebarPinned && sidebarOpened })}
+            >
               {children}
             </div>
           </MenubarContext.Provider>

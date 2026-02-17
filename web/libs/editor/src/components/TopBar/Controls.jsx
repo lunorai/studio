@@ -9,7 +9,7 @@ import { Block, Elem } from "../../utils/bem";
 import { isDefined } from "../../utils/utilities";
 
 import "./Controls.scss";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const TOOLTIP_DELAY = 0.8;
 
@@ -35,24 +35,72 @@ export const Controls = controlsInjector(
     const isReview = store.hasInterface("review");
 
     const historySelected = isDefined(store.annotationStore.selectedHistory);
-    const { userGenerate, sentUserGenerate, versions, results, editable } = annotation;
+    const { userGenerate, sentUserGenerate, versions, results, editable } =
+      annotation;
     const buttons = [];
 
     const [isInProgress, setIsInProgress] = useState(false);
+    const [
+      hasFinalSubmissionByCurrentUser,
+      setHasFinalSubmissionByCurrentUser,
+    ] = useState(false);
 
     // Check if user is organization owner/admin account
-    const isOrgAdminAccount = store.user?.activeOrganizationMeta?.email && store.user?.email === store.user?.activeOrganizationMeta?.email;
+    const isOrgAdminAccount =
+      store.user?.activeOrganizationMeta?.email &&
+      store.user?.email === store.user?.activeOrganizationMeta?.email;
+
+    useEffect(() => {
+      let cancelled = false;
+      const projectFromStore = Number(store?.project?.id ?? null);
+      const projectFromSettings = Number(window.APP_SETTINGS?.project?.id ?? null);
+      const projectFromPath = Number(window.location.pathname.match(/\/projects\/(\d+)/)?.[1] ?? null);
+      const projectId = projectFromStore || projectFromSettings || projectFromPath;
+
+      if (!projectId || isOrgAdminAccount) {
+        setHasFinalSubmissionByCurrentUser(false);
+        return;
+      }
+
+      fetch(`/api/projects/${projectId}/final-submission/check/`, {
+        credentials: "include",
+      })
+        .then((resp) =>
+          resp.ok
+            ? resp.json()
+            : Promise.reject(new Error(String(resp.status))),
+        )
+        .then((json) => {
+          if (!cancelled)
+            setHasFinalSubmissionByCurrentUser(Boolean(json?.exists));
+        })
+        .catch(() => {
+          if (!cancelled) setHasFinalSubmissionByCurrentUser(false);
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [store?.project?.id, store?.user?.id, isOrgAdminAccount]);
 
     // const isReady = store.annotationStore.selected.objects.every(object => object.isReady === undefined || object.isReady);
-    const disabled = !editable || store.isSubmitting || historySelected || isInProgress || isOrgAdminAccount; // || !isReady;
-    const submitDisabled = store.hasInterface("annotations:deny-empty") && results.length === 0;
-    
+    const disabled =
+      !editable ||
+      store.isSubmitting ||
+      historySelected ||
+      isInProgress ||
+      isOrgAdminAccount; // || !isReady;
+    const submitDisabled =
+      store.hasInterface("annotations:deny-empty") && results.length === 0;
+
     // Organization admin accounts cannot submit or update annotations
     if (isOrgAdminAccount) {
       return (
         <Block name="controls">
           <div className="grid grid-flow-col auto-cols-fr gap-tight items-center">
-            <Elem name="org-admin-info">Organization admin accounts cannot submit or update annotations</Elem>
+            <Elem name="org-admin-info">
+              Organization admin accounts cannot submit or update annotations
+            </Elem>
           </div>
         </Block>
       );
@@ -60,7 +108,12 @@ export const Controls = controlsInjector(
 
     const buttonHandler = useCallback(
       async (e, callback, tooltipMessage) => {
-        const { addedCommentThisSession, currentComment, commentFormSubmit, inputRef } = store.commentStore;
+        const {
+          addedCommentThisSession,
+          currentComment,
+          commentFormSubmit,
+          inputRef,
+        } = store.commentStore;
 
         if (isInProgress) return;
         setIsInProgress(true);
@@ -101,7 +154,11 @@ export const Controls = controlsInjector(
             look="danger"
             onClick={async (e) => {
               if (store.hasInterface("comments:reject") ?? true) {
-                buttonHandler(e, () => store.rejectAnnotation({}), "Please enter a comment before rejecting");
+                buttonHandler(
+                  e,
+                  () => store.rejectAnnotation({}),
+                  "Please enter a comment before rejecting",
+                );
               } else {
                 console.log("rejecting");
                 await store.commentStore.commentFormSubmit();
@@ -129,7 +186,9 @@ export const Controls = controlsInjector(
               store.acceptAnnotation();
             }}
           >
-            {history.canUndo || annotation.versions.draft ? "Fix + Accept" : "Accept"}
+            {history.canUndo || annotation.versions.draft
+              ? "Fix + Accept"
+              : "Accept"}
           </Button>
         </ButtonTooltip>,
       );
@@ -165,7 +224,11 @@ export const Controls = controlsInjector(
               look="outlined"
               onClick={async (e) => {
                 if (store.hasInterface("comments:skip") ?? true) {
-                  buttonHandler(e, () => store.skipTask({}), "Please enter a comment before skipping");
+                  buttonHandler(
+                    e,
+                    () => store.skipTask({}),
+                    "Please enter a comment before skipping",
+                  );
                 } else {
                   await store.commentStore.commentFormSubmit();
                   store.skipTask({});
@@ -178,54 +241,73 @@ export const Controls = controlsInjector(
         );
       }
 
-      if ((userGenerate && !sentUserGenerate) || (store.explore && !userGenerate && store.hasInterface("submit"))) {
-        const title = submitDisabled ? "Empty annotations denied in this project" : "Save results: [ Ctrl+Enter ]";
-        // span is to display tooltip for disabled button
-
+      if (hasFinalSubmissionByCurrentUser) {
         buttons.push(
-          <ButtonTooltip key="submit" title={title}>
-            <Elem name="tooltip-wrapper">
+          <Elem name="org-admin-info" key="final-submission-info">
+            You have already submitted this task and cannot submit or update
+            annotations
+          </Elem>,
+        );
+      } else {
+        if (
+          (userGenerate && !sentUserGenerate) ||
+          (store.explore && !userGenerate && store.hasInterface("submit"))
+        ) {
+          const title = submitDisabled
+            ? "Empty annotations denied in this project"
+            : "Save results: [ Ctrl+Enter ]";
+          // span is to display tooltip for disabled button
+
+          buttons.push(
+            <ButtonTooltip key="submit" title={title}>
+              <Elem name="tooltip-wrapper">
+                <Button
+                  aria-label="Submit current annotation"
+                  disabled={disabled || submitDisabled}
+                  look="primary"
+                  onClick={async () => {
+                    await store.commentStore.commentFormSubmit();
+                    store.submitAnnotation();
+                  }}
+                >
+                  Submit
+                </Button>
+              </Elem>
+            </ButtonTooltip>,
+          );
+        }
+
+        if (
+          (userGenerate && sentUserGenerate) ||
+          (!userGenerate && store.hasInterface("update"))
+        ) {
+          const isUpdate = sentUserGenerate || versions.result;
+          const button = (
+            <ButtonTooltip key="update" title="Update this task: [ Alt+Enter ]">
               <Button
-                aria-label="Submit current annotation"
+                aria-label="Update current annotation"
                 disabled={disabled || submitDisabled}
                 look="primary"
                 onClick={async () => {
                   await store.commentStore.commentFormSubmit();
-                  store.submitAnnotation();
+                  store.updateAnnotation();
                 }}
               >
-                Submit
+                {isUpdate ? "Update" : "Submit"}
               </Button>
-            </Elem>
-          </ButtonTooltip>,
-        );
-      }
+            </ButtonTooltip>
+          );
 
-      if ((userGenerate && sentUserGenerate) || (!userGenerate && store.hasInterface("update"))) {
-        const isUpdate = sentUserGenerate || versions.result;
-        const button = (
-          <ButtonTooltip key="update" title="Update this task: [ Alt+Enter ]">
-            <Button
-              aria-label="Update current annotation"
-              disabled={disabled || submitDisabled}
-              look="primary"
-              onClick={async () => {
-                await store.commentStore.commentFormSubmit();
-                store.updateAnnotation();
-              }}
-            >
-              {isUpdate ? "Update" : "Submit"}
-            </Button>
-          </ButtonTooltip>
-        );
-
-        buttons.push(button);
+          buttons.push(button);
+        }
       }
     }
 
     return (
       <Block name="controls">
-        <div className="grid grid-flow-col auto-cols-fr gap-tight items-center">{buttons}</div>
+        <div className="grid grid-flow-col auto-cols-fr gap-tight items-center">
+          {buttons}
+        </div>
       </Block>
     );
   }),
