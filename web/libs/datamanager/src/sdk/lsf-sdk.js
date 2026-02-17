@@ -176,6 +176,7 @@ export class LSFWrapper {
 
     const lsfProperties = {
       user: options.user,
+      project: { id: Number(dm.store.project?.id ?? this.project?.id) },
       config: this.lsfConfig,
       task: taskToLSFormat(this.task),
       description: this.instruction,

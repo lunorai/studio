@@ -188,6 +188,11 @@ export type MSTStore = {
   // @todo WHAT IS THIS?
   explore: any;
   user?: MSTUserExtended;
+  project?: {
+    id?: number | string;
+    challenge_id?: number | string | null;
+    round?: number | string | null;
+  };
   task: {
     data: string;
     dataObj: Record<string, any>;
