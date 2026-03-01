@@ -37,6 +37,7 @@ class LabelLink(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['project', 'label'], name='unique_label_project')]
+        ordering = ['id']
 
     def has_permission(self, user):
         user.project = self.project  # link for activity log
