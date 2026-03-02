@@ -182,6 +182,7 @@ export const instruments = {
                 task_filter_options: {
                   annotated: "only",
                   only_with_annotations: true,
+                  completed_by: djangoUserId,
                 },
                 annotation_filter_options: {
                   usual: true,
@@ -206,7 +207,7 @@ export const instruments = {
             const maxAttempts = 60;
 
             for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-              const statusResp = await fetch(`/api/projects/${projectIdNum}/exports/${exportId}/`, {
+              const statusResp = await fetch(`/api/projects/${projectIdNum}/exports/${exportId}`, {
                 credentials: "include",
               });
 

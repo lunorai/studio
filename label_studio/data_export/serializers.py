@@ -146,6 +146,11 @@ class TaskFilterOptionsSerializer(serializers.Serializer):
         '`exclude` - exclude all tasks with at least one not skipped annotation',
     )
     only_with_annotations = serializers.BooleanField(default=False, required=False, help_text='')
+    completed_by = serializers.IntegerField(
+        allow_null=True,
+        required=False,
+        help_text='Only include tasks that have at least one annotation from this user id',
+    )
 
 
 class AnnotationFilterOptionsSerializer(serializers.Serializer):

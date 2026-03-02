@@ -84,6 +84,11 @@ class ExportMixin:
             elif value == EXCLUDE:
                 tasks = tasks.exclude(annotations__was_cancelled=False)
 
+        # restrict to tasks that have at least one annotation from a specific user
+        completed_by = task_filter_options.get('completed_by')
+        if completed_by is not None:
+            tasks = tasks.filter(annotations__completed_by_id=completed_by).distinct()
+
         return tasks
 
     def _get_filtered_annotations_queryset(self, annotation_filter_options=None):
