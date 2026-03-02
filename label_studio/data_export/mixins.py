@@ -109,6 +109,11 @@ class ExportMixin:
                 q = reduce(lambda x, y: x | y, q_list)
                 queryset = queryset.filter(q)
 
+            # optionally filter annotations by a specific completed_by user id
+            completed_by = annotation_filter_options.get('completed_by')
+            if completed_by is not None:
+                queryset = queryset.filter(completed_by_id=completed_by)
+
         # pre-select completed_by user info
         queryset = queryset.select_related('completed_by')
         # prefetch reviews in LSE

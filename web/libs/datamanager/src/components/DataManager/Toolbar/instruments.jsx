@@ -109,6 +109,15 @@ export const instruments = {
     return <LabelButton size={size} />;
   },
   actions: ({ size }) => {
+    const currentUser = window.APP_SETTINGS?.user;
+    const ownerEmail = currentUser?.activeOrganizationMeta?.email ?? currentUser?.active_organization_meta?.email;
+    const membershipRole =
+      currentUser?.activeOrganizationMembership?.role ?? currentUser?.active_organization_membership?.role;
+    const isOrganizationOwner = Boolean(currentUser?.isOwner) || (Boolean(ownerEmail) && currentUser?.email === ownerEmail);
+    const isOrganizationAdmin = membershipRole === "AD";
+
+    if (!isOrganizationOwner && !isOrganizationAdmin) return null;
+
     return <ActionsButton size={size} style={style} />;
   },
   "error-box": () => {
@@ -151,23 +160,91 @@ export const instruments = {
         });
 
         const onClick = async () => {
+          const app = window.APP_SETTINGS ?? {};
+          const projectIdNum = Number(projectId ?? null);
+          const djangoUserId = app?.user?.id ?? null;
+
+          if (!projectIdNum || !djangoUserId) {
+            store?.SDK?.invoke?.("toast", { message: "Missing project or user information", type: "error" });
+            return;
+          }
+
           try {
             setLoading(true);
-            const params = new URLSearchParams({ exportType: "CSV", annotations_by_me: "1" });
-            const response = await fetch(`/api/projects/${projectId}/export?${params.toString()}`, {
+
+            // 1) Create an async export snapshot containing only current user's annotations
+            const createResp = await fetch(`/api/projects/${projectIdNum}/exports/`, {
+              method: "POST",
               credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: "Final submission (my annotations)",
+                task_filter_options: {
+                  annotated: "only",
+                  only_with_annotations: true,
+                },
+                annotation_filter_options: {
+                  usual: true,
+                  completed_by: djangoUserId,
+                },
+                serialization_options: {
+                  include_annotation_history: false,
+                  interpolate_key_frames: false,
+                },
+              }),
             });
-            if (!response.ok) throw new Error(`${response.status}`);
-            const blob = await response.blob();
+
+            if (!createResp.ok) throw new Error(`Export create ${createResp.status}`);
+
+            const createJson = await createResp.json();
+            const exportId = createJson?.id;
+
+            if (!exportId) throw new Error("No export id returned");
+
+            // 2) Poll export snapshot status until completed
+            const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const maxAttempts = 60;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+              const statusResp = await fetch(`/api/projects/${projectIdNum}/exports/${exportId}/`, {
+                credentials: "include",
+              });
+
+              if (!statusResp.ok) throw new Error(`Export status ${statusResp.status}`);
+
+              const statusJson = await statusResp.json();
+              const status = statusJson?.status;
+
+              if (status === "completed") break;
+              if (status === "failed") throw new Error("Export failed");
+
+              await delay(3000);
+
+              if (attempt === maxAttempts - 1) {
+                throw new Error("Export timed out");
+              }
+            }
+
+            // 3) Download CSV for completed export snapshot
+            const params = new URLSearchParams({ exportType: "CSV" });
+            const downloadResp = await fetch(
+              `/api/projects/${projectIdNum}/exports/${exportId}/download?${params.toString()}`,
+              {
+                credentials: "include",
+              },
+            );
+
+            if (!downloadResp.ok) throw new Error(`Export download ${downloadResp.status}`);
+
+            const blob = await downloadResp.blob();
 
             // Prepare upload params
-            const app = window.APP_SETTINGS ?? {};
-            
             const fallback = `annotations-${app?.user?.id || "me"}.csv`;
-            const filename = (response.headers.get("filename") || fallback).replace(/\.json$/i, ".csv");
+            const filenameHeader = downloadResp.headers.get("filename");
+            const filename = (filenameHeader || fallback).replace(/\.json$/i, ".csv");
             const challengeId = Number(store?.project?.challenge_id ?? null);
             const round = store?.project?.round ?? 1;
-            const userId = app?.user?.lunor_userId ?? '';
+            const userId = app?.user?.lunor_userId ?? "";
 
             const runtimeGraphql = window.APP_SETTINGS?.graphql_endpoint && String(window.APP_SETTINGS.graphql_endpoint);
             const graphqlEndpoint = runtimeGraphql || process.env.GRAPHQL_ENDPOINT || "https://feat.100protocol.com/";
@@ -231,9 +308,8 @@ export const instruments = {
 
             // Record final submission in backend and disable button
             try {
-              const projectIdNum2 = Number(projectId ?? null);
-              if (projectIdNum2) {
-                const recResp = await fetch(`/api/projects/${projectIdNum2}/final-submission/`, {
+              if (projectIdNum) {
+                const recResp = await fetch(`/api/projects/${projectIdNum}/final-submission/`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   credentials: "include",

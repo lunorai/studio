@@ -156,6 +156,11 @@ class AnnotationFilterOptionsSerializer(serializers.Serializer):
         allow_null=True, required=False, help_text='Include ground truth annotations'
     )
     skipped = serializers.BooleanField(allow_null=True, required=False, help_text='Include skipped annotations')
+    completed_by = serializers.IntegerField(
+        allow_null=True,
+        required=False,
+        help_text='Filter annotations by completed_by user id',
+    )
 
 
 class SerializationOptionsSerializer(serializers.Serializer):
