@@ -328,6 +328,18 @@ def user_authenticate(request):
     email = (payload.get(email_claim) or (payload.get('sub') if subject_as_email else '') or '').lower()
     lunor_userId = payload.get(username_claim) or payload.get('preferred_username') or payload.get('username')
 
+    # Organization-related fields coming from Lunor token
+    is_org = payload.get('is_org')
+    if is_org is None:
+        # Support alternate camelCase claim
+        is_org = payload.get('isOrg')
+    org_title_from_token = (
+        payload.get('organization')
+        or payload.get('org_name')
+        or payload.get('orgTitle')
+        or 'Lunor Studio'
+    )
+
     # Check for projectId in token and set redirect accordingly
     project_id = payload.get('projectId')
     if project_id:
@@ -376,16 +388,22 @@ def user_authenticate(request):
 
         login(request, user, backend='django.contrib.auth.backends.ModelBackend')
 
+        # Determine or create organization for existing user.
         try:
+            # Existing active membership: use the first one.
             org_pk = Organization.find_by_user(user).pk
             user.active_organization_id = org_pk
             user.save(update_fields=['active_organization'])
         except Exception:
-            if Organization.objects.exists():
-                org = Organization.objects.first()
-                org.add_user(user)
+            # No memberships found. If this is an "org" login, create a fresh org for this user.
+            if is_org:
+                org = Organization.create_organization(created_by=user, title=org_title_from_token)
             else:
-                org = Organization.create_organization(created_by=user, title='Label Studio')
+                if Organization.objects.exists():
+                    org = Organization.objects.first()
+                    org.add_user(user)
+                else:
+                    org = Organization.create_organization(created_by=user, title='Label Studio')
             user.active_organization = org
             user.save(update_fields=['active_organization'])
 
@@ -404,16 +422,20 @@ def user_authenticate(request):
         user = User.objects.create_user(
             email=email,
             password=password_for_creation,
-            lunor_userId=lunor_userId
+            lunor_userId=lunor_userId,
         )
         user.username = email.split('@')[0]
         user.save(update_fields=['username'])
 
-        if Organization.objects.exists():
-            org = Organization.objects.first()
-            org.add_user(user)
+        # For a new user with is_org=True, always create a dedicated organization.
+        if is_org:
+            org = Organization.create_organization(created_by=user, title=org_title_from_token)
         else:
-            org = Organization.create_organization(created_by=user, title='Label Studio')
+            if Organization.objects.exists():
+                org = Organization.objects.first()
+                org.add_user(user)
+            else:
+                org = Organization.create_organization(created_by=user, title='Label Studio')
         user.active_organization = org
         user.save(update_fields=['active_organization'])
 

@@ -28,6 +28,7 @@ const summaryInjector = inject(({ store }) => {
     totalTasks: project?.task_count ?? project?.task_number ?? 0,
     totalFoundTasks: taskStore?.total ?? 0,
     totalAnnotations: taskStore?.totalAnnotations ?? 0,
+    totalUserAnnotations: taskStore?.totalUserAnnotations ?? 0,
     totalPredictions: taskStore?.totalPredictions ?? 0,
     cloudSync: project.target_syncing ?? project.source_syncing ?? false,
   };
@@ -44,9 +45,18 @@ const switchInjector = inject(({ store }) => {
 
 const ProjectSummary = summaryInjector((props) => {
   return (
-    <Space size="large" style={{ paddingRight: "1em", color: "var(--color-neutral-content-subtle)" }}>
+    <Space
+      size="large"
+      style={{
+        paddingRight: "1em",
+        color: "var(--color-neutral-content-subtle)",
+      }}
+    >
       {props.cloudSync && (
-        <Space size="small" style={{ fontSize: 12, fontWeight: 400, opacity: 0.8 }}>
+        <Space
+          size="small"
+          style={{ fontSize: 12, fontWeight: 400, opacity: 0.8 }}
+        >
           Storage sync
           <Spinner size="small" />
         </Space>
@@ -58,6 +68,7 @@ const ProjectSummary = summaryInjector((props) => {
             <span title="Total tasks in the project">{props.totalTasks}</span>
           </span>
           <span>Submitted annotations: {props.totalAnnotations}</span>
+          <span>My submitted annotations: {props.totalUserAnnotations}</span>
           <span>Predictions: {props.totalPredictions}</span>
         </Space>
       </span>
@@ -127,7 +138,12 @@ const TabsSwitch = switchInjector(
 export const DataManager = injector(({ shrinkWidth }) => {
   return (
     <div className={tabContentCN.toString()}>
-      <div className={tabContentCN.elem("tab").mod({ shrink: shrinkWidth }).toString()}>
+      <div
+        className={tabContentCN
+          .elem("tab")
+          .mod({ shrink: shrinkWidth })
+          .toString()}
+      >
         <Interface name="tabs">
           <TabsSwitch />
         </Interface>

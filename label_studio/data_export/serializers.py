@@ -26,6 +26,7 @@ class CompletedBySerializer(serializers.ModelSerializer):
 class AnnotationSerializer(FlexFieldsModelSerializer):
     completed_by = serializers.PrimaryKeyRelatedField(read_only=True)
     result = serializers.SerializerMethodField()
+    completed_by_lunor_userId = serializers.SerializerMethodField()
 
     class Meta:
         model = Annotation
@@ -42,6 +43,10 @@ class AnnotationSerializer(FlexFieldsModelSerializer):
             return extract_key_frames(obj.result)
         return obj.result
 
+    def get_completed_by_lunor_userId(self, obj):
+        user = getattr(obj, "completed_by", None)
+        return getattr(user, "lunor_userId", None) if user is not None else None
+
 
 class BaseExportDataSerializer(FlexFieldsModelSerializer):
     annotations = AnnotationSerializer(many=True, read_only=True)
@@ -57,7 +62,11 @@ class BaseExportDataSerializer(FlexFieldsModelSerializer):
             project = task.project
             setattr(self, '_project', project)
 
-        data = task.data
+        data = dict(task.data) if isinstance(task.data, dict) else task.data
+        # Ensure we don't duplicate lunor id at task data level; it's available per-annotation only
+        if isinstance(data, dict) and 'completed_by_lunor_userId' in data:
+            data.pop('completed_by_lunor_userId', None)
+
         # add interpolate_key_frames param to annotations serializer
         if 'annotations' in self.fields:
             self.fields['annotations'].context['interpolate_key_frames'] = self.context.get(

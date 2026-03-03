@@ -1,4 +1,8 @@
-import { IconChevronDown, IconChevronRight, IconTrash } from "@humansignal/icons";
+import {
+  IconChevronDown,
+  IconChevronRight,
+  IconTrash,
+} from "@humansignal/icons";
 import { Button, Spinner, Tooltip } from "@humansignal/ui";
 import { inject, observer } from "mobx-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -40,13 +44,21 @@ const DialogContent = ({ text, form, formRef, store, action }) => {
     <Block name="dialog-content">
       <Elem name="text">{text}</Elem>
       {isLoading && (
-        <Elem name="loading" style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+        <Elem
+          name="loading"
+          style={{ display: "flex", justifyContent: "center", marginTop: 16 }}
+        >
           <Spinner />
         </Elem>
       )}
       {formData && (
         <Elem name="form" style={{ paddingTop: 16 }}>
-          <Form.Builder ref={formRef} fields={fields} autosubmit={false} withActions={false} />
+          <Form.Builder
+            ref={formRef}
+            fields={fields}
+            autosubmit={false}
+            withActions={false}
+          />
         </Elem>
       )}
     </Block>
@@ -67,7 +79,14 @@ const ActionButton = ({ action, parentRef, store, formRef }) => {
         : invokeAction(action, isDeleteAction, store, formRef);
       parentRef?.current?.close?.();
     },
-    [store.currentView?.selected, action, isDeleteAction, parentRef, store, formRef],
+    [
+      store.currentView?.selected,
+      action,
+      isDeleteAction,
+      parentRef,
+      store,
+      formRef,
+    ],
   );
 
   const titleContainer = (
@@ -87,7 +106,10 @@ const ActionButton = ({ action, parentRef, store, formRef }) => {
       name="actionButton"
       aria-label={action.title}
     >
-      <Elem name="titleContainer" {...(action.disabled ? { title: action.disabledReason } : {})}>
+      <Elem
+        name="titleContainer"
+        {...(action.disabled ? { title: action.disabledReason } : {})}
+      >
         <Elem name="title">{action.title}</Elem>
         {hasChildren ? <Elem name="icon" tag={IconChevronRight} /> : null}
       </Elem>
@@ -121,7 +143,12 @@ const ActionButton = ({ action, parentRef, store, formRef }) => {
   }
 
   return (
-    <Tooltip key={action.id} title={action.disabled_reason} disabled={!action.disabled} alignment="bottom-center">
+    <Tooltip
+      key={action.id}
+      title={action.disabled_reason}
+      disabled={!action.disabled}
+      alignment="bottom-center"
+    >
       <div>
         <Menu.Item
           size="small"
@@ -164,7 +191,9 @@ const invokeAction = (action, destructive, store, formRef) => {
         delete_ground_truths: "ground truths",
       };
 
-      const objectType = objectMap[action.id] || action.title.toLowerCase().replace("delete ", "");
+      const objectType =
+        objectMap[action.id] ||
+        action.title.toLowerCase().replace("delete ", "");
       dialogTitle = `Delete selected ${objectType}?`;
 
       // Convert to title case for button text
@@ -177,13 +206,27 @@ const invokeAction = (action, destructive, store, formRef) => {
 
     if (destructive && !form) {
       // Use standardized warning message for simple delete actions
-      const objectType = dialogTitle ? dialogTitle.replace("Delete selected ", "").replace("?", "") : "items";
+      const objectType = dialogTitle
+        ? dialogTitle.replace("Delete selected ", "").replace("?", "")
+        : "items";
       dialogText = `You are about to delete the selected ${objectType}.\n\nThis can't be undone.`;
     }
 
     dialog({
-      title: dialogTitle ? dialogTitle : destructive ? "Destructive action" : "Confirm action",
-      body: <DialogContent text={dialogText} form={form} formRef={formRef} store={store} action={action} />,
+      title: dialogTitle
+        ? dialogTitle
+        : destructive
+          ? "Destructive action"
+          : "Confirm action",
+      body: (
+        <DialogContent
+          text={dialogText}
+          form={form}
+          formRef={formRef}
+          store={store}
+          action={action}
+        />
+      ),
       buttonLook: destructive ? "negative" : "primary",
       okText: destructive ? okButtonText : undefined,
       onOk() {
@@ -207,7 +250,9 @@ export const ActionsButton = injector(
     const [isLoading, setIsLoading] = useState(false);
 
     const actions = useMemo(() => {
-      return store.availableActions.filter((a) => !a.hidden).sort((a, b) => a.order - b.order);
+      return store.availableActions
+        .filter((a) => !a.hidden)
+        .sort((a, b) => a.order - b.order);
     }, [store.availableActions]);
 
     useEffect(() => {
@@ -220,14 +265,27 @@ export const ActionsButton = injector(
     }, [isOpen, actions, store]);
 
     const actionButtons = actions.map((action) => (
-      <ActionButton key={action.id} action={action} parentRef={formRef} store={store} formRef={formRef} />
+      <ActionButton
+        key={action.id}
+        action={action}
+        parentRef={formRef}
+        store={store}
+        formRef={formRef}
+      />
     ));
-    const recordTypeLabel = isFFLOPSE3 && store.SDK.type === "DE" ? "Record" : "Task";
+    const recordTypeLabel =
+      isFFLOPSE3 && store.SDK.type === "DE" ? "Record" : "Task";
 
     return (
       <Dropdown.Trigger
         content={
-          <Menu size="compact">{isLoading ? <Menu.Item disabled>Loading actions...</Menu.Item> : actionButtons}</Menu>
+          <Menu size="compact">
+            {isLoading ? (
+              <Menu.Item disabled>Loading actions...</Menu.Item>
+            ) : (
+              actionButtons
+            )}
+          </Menu>
         }
         openUpwardForShortViewport={false}
         disabled={!hasSelected}
@@ -242,7 +300,9 @@ export const ActionsButton = injector(
           aria-label="Tasks Actions"
           {...rest}
         >
-          {selectedCount > 0 ? `${selectedCount} ${recordTypeLabel}${selectedCount > 1 ? "s" : ""}` : "Actions"}
+          {selectedCount > 0
+            ? `${selectedCount} ${recordTypeLabel}${selectedCount > 1 ? "s" : ""}`
+            : "Actions"}
         </Button>
       </Dropdown.Trigger>
     );

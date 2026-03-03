@@ -243,6 +243,7 @@ class TaskPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     total_annotations = 0
     total_predictions = 0
+    total_user_annotations = 0
     max_page_size = settings.TASK_API_PAGE_SIZE_MAX
 
     @async_to_sync
@@ -252,11 +253,18 @@ class TaskPagination(PageNumberPagination):
 
         annotations_count_qs = Annotation.objects.filter(task_id__in=queryset, was_cancelled=False)
         self.total_annotations = await sync_to_async(annotations_count_qs.count, thread_sensitive=True)()
+        user_annotations_count_qs = annotations_count_qs.filter(completed_by=request.user)
+        self.total_user_annotations = await sync_to_async(user_annotations_count_qs.count, thread_sensitive=True)()
         return await sync_to_async(super().paginate_queryset, thread_sensitive=True)(queryset, request, view)
 
     def sync_paginate_queryset(self, queryset, request, view=None):
         self.total_predictions = Prediction.objects.filter(task_id__in=queryset).count()
         self.total_annotations = Annotation.objects.filter(task_id__in=queryset, was_cancelled=False).count()
+        self.total_user_annotations = Annotation.objects.filter(
+            task_id__in=queryset,
+            was_cancelled=False,
+            completed_by=request.user,
+        ).count()
         return super().paginate_queryset(queryset, request, view)
 
     def paginate_totals_queryset(self, queryset, request, view=None):
@@ -266,6 +274,11 @@ class TaskPagination(PageNumberPagination):
         )
         self.total_annotations = totals['total_annotations']
         self.total_predictions = totals['total_predictions']
+        self.total_user_annotations = Annotation.objects.filter(
+            task_id__in=queryset,
+            was_cancelled=False,
+            completed_by=request.user,
+        ).count()
         return super().paginate_queryset(queryset, request, view)
 
     def paginate_queryset(self, queryset, request, view=None):
@@ -293,8 +306,13 @@ class TaskPagination(PageNumberPagination):
                     'description': 'Total number of predictions',
                     'example': 78,
                 },
+                'total_user_annotations': {
+                    'type': 'integer',
+                    'description': 'Total number of submitted annotations by the current user',
+                    'example': 12,
+                },
             },
-            'required': ['tasks', 'total', 'total_annotations', 'total_predictions'],
+            'required': ['tasks', 'total', 'total_annotations', 'total_predictions', 'total_user_annotations'],
         }
 
     def get_paginated_response(self, data):
@@ -302,6 +320,7 @@ class TaskPagination(PageNumberPagination):
             {
                 'total_annotations': self.total_annotations,
                 'total_predictions': self.total_predictions,
+                'total_user_annotations': self.total_user_annotations,
                 'total': self.page.paginator.count,
                 'tasks': data,
             }
