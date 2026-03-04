@@ -50,8 +50,16 @@ export const ProjectProvider: React.FunctionComponent = ({ children }) => {
         setProjectData({ ...projectCache.get(finalProjectId)! });
       }
 
+      const isDataManagerRoute = window.location.pathname.includes("/data");
       const result = await api.callApi<APIProject>("project", {
-        params: { pk: finalProjectId },
+        params: {
+          pk: finalProjectId,
+          ...(isDataManagerRoute
+            ? {
+                dm_fast: 1,
+              }
+            : {}),
+        },
         errorFilter: () => false,
       });
 

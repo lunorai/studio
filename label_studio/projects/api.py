@@ -24,6 +24,7 @@ from core.utils.common import paginator, paginator_help, temporary_disconnect_al
 from core.utils.exceptions import LabelStudioDatabaseException, ProjectExistException
 from core.utils.filterset_to_openapi_params import filterset_to_openapi_params
 from core.utils.io import find_dir, find_file, read_yaml
+from core.utils.params import bool_from_request
 from core.utils.serializer_to_openapi_params import serializer_to_openapi_params
 from data_manager.functions import filters_ordering_selected_items_exist, get_prepared_queryset
 from data_export.serializers import ExportDataSerializer
@@ -522,7 +523,14 @@ class ProjectAPI(generics.RetrieveUpdateDestroyAPIView):
         serializer = GetFieldsSerializer(data=self.request.query_params)
         serializer.is_valid(raise_exception=True)
         fields = serializer.validated_data.get('include')
-        return Project.objects.with_counts(fields=fields).filter(organization=self.request.user.active_organization)
+        if bool_from_request(self.request.query_params, 'dm_fast', False):
+            fields = fields if fields is not None else []
+
+        return (
+            Project.objects.with_counts(fields=fields)
+            .filter(organization=self.request.user.active_organization)
+            .select_related('created_by', 'organization')
+        )
 
     def get(self, request, *args, **kwargs):
         return super(ProjectAPI, self).get(request, *args, **kwargs)

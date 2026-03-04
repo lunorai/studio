@@ -271,7 +271,6 @@ export const DataView = injector(
       () => [
         commonDecoration("total_annotations", 60, "center"),
         commonDecoration("cancelled_annotations", 60, "center"),
-        commonDecoration("total_predictions", 60, "center"),
         commonDecoration("completed_at", 180, "space-between", true),
         commonDecoration("reviews_accepted", 60, "center"),
         commonDecoration("reviews_rejected", 60, "center"),
@@ -320,7 +319,7 @@ export const DataView = injector(
           order={view.ordering}
           focusedItem={focusedItem}
           isItemLoaded={isItemLoaded}
-          sortingEnabled={view.type === "list"}
+          sortingEnabled={false}
           columnHeaderExtra={columnHeaderExtra}
           selectedItems={selectedItems}
           onSelectAll={onSelectAll}

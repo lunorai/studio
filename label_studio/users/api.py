@@ -9,6 +9,7 @@ from core.permissions import ViewClassPermission, all_permissions
 from django.utils.decorators import method_decorator
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from projects.models import Project
 from rest_framework import generics, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action
@@ -183,7 +184,25 @@ class UserAPI(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'head', 'patch', 'delete']
 
     def get_queryset(self):
-        return User.objects.filter(organizations=self.request.user.active_organization)
+        queryset = (
+            User.objects.filter(organizations=self.request.user.active_organization)
+            .select_related('active_organization', 'active_organization__created_by')
+            .prefetch_related('om_through')
+            .distinct()
+        )
+
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            project = Project.objects.filter(
+                pk=project_id,
+                organization=self.request.user.active_organization,
+            ).first()
+            if not project:
+                return queryset.none()
+
+            queryset = queryset.filter(project_memberships__project=project, project_memberships__enabled=True)
+
+        return queryset
 
     @extend_schema(exclude=True)
     @action(detail=True, methods=['delete', 'post'], permission_required=all_permissions.avatar_any)

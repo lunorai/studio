@@ -309,12 +309,12 @@ export const Tab = types
 
     setGridWidth(width) {
       self.gridWidth = width;
-      self.save();
+      self.save({ reload: false });
     },
 
     setFitImagesToWidth(responsive) {
       self.gridFitImagesToWidth = responsive;
-      self.save();
+      self.save({ reload: false });
     },
 
     setSelected(ids) {
@@ -419,7 +419,7 @@ export const Tab = types
       } else {
         self.hiddenColumns.add(column);
       }
-      self.save();
+      self.save({ reload: false });
     },
 
     setAgreementFilters({ ground_truth = false, annotators = [], models = [] }) {

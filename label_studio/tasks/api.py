@@ -304,10 +304,11 @@ class TaskAPI(generics.RetrieveUpdateDestroyAPIView):
         )
 
     def get_retrieve_serializer_context(self, request):
-        fields = ['drafts', 'predictions', 'annotations']
+        fields_param = request.GET.get('fields', '')
+        fields = [] if fields_param == 'task_only' else ['drafts', 'predictions', 'annotations']
 
         return {
-            'resolve_uri': True,
+            'resolve_uri': bool_from_request(request.GET, 'resolve_uri', False),
             'predictions': 'predictions' in fields,
             'annotations': 'annotations' in fields,
             'drafts': 'drafts' in fields,
@@ -321,7 +322,7 @@ class TaskAPI(generics.RetrieveUpdateDestroyAPIView):
         # get prediction
         if (
             project.evaluate_predictions_automatically or project.show_collab_predictions
-        ) and not self.task.predictions.exists():
+        ) and bool_from_request(request.GET, 'evaluate_predictions', False) and not self.task.predictions.exists():
             evaluate_predictions([self.task])
             # refresh task from db with prefetches
             self.task = self.get_object()
@@ -336,7 +337,24 @@ class TaskAPI(generics.RetrieveUpdateDestroyAPIView):
         return ['annotations_results', 'predictions_results']
 
     def get_queryset(self):
+        dm_fast = bool_from_request(self.request.GET, 'dm_fast', True)
         task_id = self.request.parser_context['kwargs'].get('pk')
+        project = self.request.query_params.get('project') or self.request.data.get('project')
+
+        if dm_fast:
+            queryset = Task.objects.filter(pk=task_id, project__organization=self.request.user.active_organization)
+            if project:
+                queryset = queryset.filter(project_id=project)
+
+            queryset = queryset.select_related('project', 'updated_by')
+
+            fields_param = self.request.GET.get('fields', '')
+            include_related = fields_param != 'task_only'
+            if include_related:
+                queryset = queryset.prefetch_related('annotations__completed_by', 'predictions', 'drafts')
+
+            return queryset
+
         task = generics.get_object_or_404(Task, pk=task_id)
         review = bool_from_request(self.request.GET, 'review', False)
         selected = {'all': False, 'included': [self.kwargs.get('pk')]}
@@ -350,7 +368,6 @@ class TaskAPI(generics.RetrieveUpdateDestroyAPIView):
                 }
             else:
                 kwargs = {'all_fields': True}
-        project = self.request.query_params.get('project') or self.request.data.get('project')
         if not project:
             project = task.project.id
         return self.prefetch(
@@ -453,6 +470,47 @@ class AnnotationAPI(generics.RetrieveUpdateDestroyAPIView):
 
     serializer_class = AnnotationSerializer
     queryset = Annotation.objects.all()
+
+    def get_queryset(self):
+        queryset = Annotation.objects.for_user(self.request.user).select_related('completed_by')
+
+        # This endpoint doesn't return `prediction`, but that JSON can be very large.
+        queryset = queryset.defer('prediction')
+        queryset = queryset.only(
+            'id',
+            'result',
+            'task_id',
+            'project_id',
+            'completed_by_id',
+            'updated_by_id',
+            'was_cancelled',
+            'ground_truth',
+            'created_at',
+            'updated_at',
+            'draft_created_at',
+            'lead_time',
+            'unique_id',
+            'import_id',
+            'last_action',
+            'last_created_by_id',
+            'bulk_created',
+            'completed_by__id',
+            'completed_by__first_name',
+            'completed_by__last_name',
+            'completed_by__avatar',
+            'completed_by__email',
+            'completed_by__initials',
+        )
+
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+
+        task_id = self.request.query_params.get('taskID') or self.request.query_params.get('task')
+        if task_id:
+            queryset = queryset.filter(task_id=task_id)
+
+        return queryset
 
     def perform_destroy(self, annotation):
         # Check if user is organization owner/admin account and deny deletion
@@ -588,8 +646,42 @@ class AnnotationsListAPI(GetParentObjectMixin, generics.ListCreateAPIView):
         return super(AnnotationsListAPI, self).post(request, *args, **kwargs)
 
     def get_queryset(self):
-        task = generics.get_object_or_404(Task.objects.for_user(self.request.user), pk=self.kwargs.get('pk', 0))
-        return Annotation.objects.filter(Q(task=task) & Q(was_cancelled=False)).order_by('pk')
+        queryset = (
+            Annotation.objects.for_user(self.request.user)
+            .filter(task_id=self.kwargs.get('pk', 0), was_cancelled=False)
+            .select_related('completed_by')
+            .defer('prediction')
+            .only(
+                'id',
+                'result',
+                'task_id',
+                'project_id',
+                'completed_by_id',
+                'updated_by_id',
+                'was_cancelled',
+                'ground_truth',
+                'created_at',
+                'updated_at',
+                'draft_created_at',
+                'lead_time',
+                'unique_id',
+                'import_id',
+                'last_action',
+                'last_created_by_id',
+                'bulk_created',
+                'completed_by__id',
+                'completed_by__first_name',
+                'completed_by__last_name',
+                'completed_by__avatar',
+                'completed_by__email',
+                'completed_by__initials',
+            )
+            .order_by('pk')
+        )
+        project_id = self.request.query_params.get('project')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        return queryset
 
     def delete_draft(self, draft_id, annotation_id):
         try:

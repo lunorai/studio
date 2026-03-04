@@ -212,18 +212,18 @@ export const TabColumn = types
 
     setType(type) {
       self.parentView.setColumnDisplayType(self.id, type);
-      self.parentView.save();
+      self.parentView.save({ reload: false });
     },
 
     setWidth(width) {
       const view = self.parentView;
 
       view.setColumnWidth(self.id, width ?? null);
-      view.save();
+      view.save({ reload: false });
     },
 
     resetWidth() {
       self.parentView.setColumnWidth(self.id, null);
-      self.parentView.save();
+      self.parentView.save({ reload: false });
     },
   }));
