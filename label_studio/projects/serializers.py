@@ -106,6 +106,9 @@ class ProjectSerializer(FlexFieldsModelSerializer):
             return next(iter(self.context['user_cache']))
 
     def _is_fast_request(self):
+        if self.context.get('dm_fast'):
+            return True
+
         request = self.context.get('request')
         if request is None:
             return False

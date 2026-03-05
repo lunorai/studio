@@ -444,16 +444,10 @@ class TaskListAPI(generics.ListCreateAPIView):
             page_size = max(1, int_from_request(request.GET, 'page_size', self.pagination_class.page_size) or self.pagination_class.page_size)
             offset = (page_number - 1) * page_size
 
-            ids_with_extra = list(queryset.values_list('id', flat=True)[offset : offset + page_size + 1])
-            has_next_page = len(ids_with_extra) > page_size
-            ids = ids_with_extra[:page_size]
-
-            if ids:
-                tasks = Task.objects.filter(id__in=ids)
-                tasks_by_ids = {task.id: task for task in tasks}
-                page = [tasks_by_ids[_id] for _id in ids if _id in tasks_by_ids]
-            else:
-                page = []
+            # Fetch page items directly and include project relation to avoid per-task project lookups in serializer.
+            page_with_extra = list(queryset.select_related('project')[offset : offset + page_size + 1])
+            has_next_page = len(page_with_extra) > page_size
+            page = page_with_extra[:page_size]
 
             all_fields = 'all' if request.GET.get('fields', None) == 'all' else None
             context = self.get_task_serializer_context(self.request, project, page)

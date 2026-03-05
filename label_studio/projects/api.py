@@ -16,6 +16,7 @@ import os
 import pathlib
 
 from core.filters import ListFilter
+from core.feature_flags import flag_set
 from core.label_config import config_essential_data_has_changed
 from core.mixins import GetParentObjectMixin
 from core.permissions import ViewClassPermission, all_permissions
@@ -30,7 +31,7 @@ from data_manager.functions import filters_ordering_selected_items_exist, get_pr
 from data_export.serializers import ExportDataSerializer
 from django.conf import settings
 from django.db import IntegrityError
-from django.db.models import F
+from django.db.models import Count, F, Q, Sum
 from django.http import Http404
 from django.utils.decorators import method_decorator
 from django_filters import CharFilter, FilterSet
@@ -301,6 +302,14 @@ class ProjectUserTasksAPI(APIView):
     ),
 )
 class ProjectListAPI(generics.ListCreateAPIView):
+    FAST_COUNTER_FIELDS = {
+        'task_number',
+        'finished_task_number',
+        'total_annotations_number',
+        'total_predictions_number',
+        'skipped_annotations_number',
+    }
+
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     serializer_class = ProjectSerializer
     filter_backends = [filters.OrderingFilter, DjangoFilterBackend]
@@ -311,10 +320,53 @@ class ProjectListAPI(generics.ListCreateAPIView):
     )
     pagination_class = ProjectListPagination
 
+    def _is_dm_fast(self):
+        default_fast = flag_set('fflag_fix_back_plt_811_projects_pagination_01072025_short', user=self.request.user)
+        return bool_from_request(self.request.query_params, 'dm_fast', default_fast)
+
+    @staticmethod
+    def _attach_page_counts(projects, fields):
+        project_ids = [p.id for p in projects]
+        if not project_ids:
+            return
+
+        task_stats = {
+            row['project_id']: row
+            for row in Task.objects.filter(project_id__in=project_ids)
+            .values('project_id')
+            .annotate(
+                task_number=Count('id'),
+                finished_task_number=Count('id', filter=Q(is_labeled=True)),
+                total_annotations_number=Sum('total_annotations'),
+                # total_predictions_number=Sum('total_predictions'),
+                skipped_annotations_number=Sum('cancelled_annotations'),
+            )
+        }
+
+        for project in projects:
+            stats = task_stats.get(project.id) or {}
+            for field in fields:
+                setattr(project, field, stats.get(field, 0) or 0)
+
     def get_queryset(self):
         serializer = GetFieldsSerializer(data=self.request.query_params)
         serializer.is_valid(raise_exception=True)
-        fields = serializer.validated_data.get('include')
+        requested_fields = serializer.validated_data.get('include')
+        self._requested_include_fields = requested_fields
+
+        dm_fast = self._is_dm_fast()
+        requested_set = set(requested_fields or [])
+        if requested_fields is None:
+            self._page_counter_fields = set(self.FAST_COUNTER_FIELDS) if dm_fast else set()
+        else:
+            self._page_counter_fields = self.FAST_COUNTER_FIELDS.intersection(requested_set) if dm_fast else set()
+
+        fields = requested_fields
+        if dm_fast:
+            if fields is None:
+                fields = []
+            else:
+                fields = [f for f in fields if f not in self.FAST_COUNTER_FIELDS]
         filter = serializer.validated_data.get('filter')
         projects = Project.objects.filter(organization=self.request.user.active_organization).order_by(
             F('pinned_at').desc(nulls_last=True), '-created_at'
@@ -334,12 +386,26 @@ class ProjectListAPI(generics.ListCreateAPIView):
                 projects = projects.none()
         if filter in ['pinned_only', 'exclude_pinned']:
             projects = projects.filter(pinned_at__isnull=filter == 'exclude_pinned')
-        return ProjectManager.with_counts_annotate(projects, fields=fields).prefetch_related('members', 'created_by')
+        return ProjectManager.with_counts_annotate(projects, fields=fields).select_related('created_by')
 
     def get_serializer_context(self):
         context = super(ProjectListAPI, self).get_serializer_context()
         context['created_by'] = self.request.user
+        context['dm_fast'] = self._is_dm_fast()
         return context
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        project_list = page if page is not None else queryset
+
+        if self._is_dm_fast() and getattr(self, '_page_counter_fields', None):
+            self._attach_page_counts(project_list, self._page_counter_fields)
+
+        serializer = self.get_serializer(project_list, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
     def perform_create(self, ser):
         try:

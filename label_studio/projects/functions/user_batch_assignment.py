@@ -42,17 +42,21 @@ def get_or_create_user_assignment(user: User, project: Project) -> Optional[User
         if not created and assignment.tasks.exists():
             return assignment
 
-        tasks_qs = Task.objects.filter(project=project).order_by('id').only('id')
-        task_ids = list(tasks_qs.values_list('id', flat=True))
-        total = len(task_ids)
+        tasks_qs = Task.objects.filter(project=project).order_by('id').values_list('id', flat=True)
+        total = tasks_qs.count()
         if total == 0:
             return assignment
 
         start = project.global_task_index % total
-        end = start + batch_size
-
-        indices = [(i % total) for i in range(start, end)]
-        selected_ids = [task_ids[i] for i in indices]
+        # Fetch only the required task-id window(s) instead of loading all task ids.
+        selected_ids = []
+        remaining = batch_size
+        cursor = start
+        while remaining > 0:
+            chunk_size = min(remaining, total - cursor)
+            selected_ids.extend(list(tasks_qs[cursor : cursor + chunk_size]))
+            remaining -= chunk_size
+            cursor = 0
 
         assignment.tasks.set(Task.objects.filter(id__in=selected_ids))
 
@@ -60,5 +64,4 @@ def get_or_create_user_assignment(user: User, project: Project) -> Optional[User
         project.save(update_fields=['global_task_index'])
 
     return assignment
-
 
