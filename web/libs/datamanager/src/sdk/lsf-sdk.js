@@ -85,6 +85,15 @@ export class LSFWrapper {
   /** @type {Promise<any>|null} */
   prefetchInFlight = null;
 
+  /** @type {Array<Object>} */
+  failedBackgroundSubmissions = [];
+
+  /** @type {boolean} */
+  retryingBackgroundSubmissions = false;
+
+  /** @type {function|null} */
+  onlineRetryHandler = null;
+
   /** @type {function} */
   interfacesModifier = (interfaces) => interfaces;
 
@@ -227,6 +236,11 @@ export class LSFWrapper {
     };
 
     this.initLabelStudio(lsfProperties);
+
+    this.onlineRetryHandler = () => {
+      void this.retryFailedBackgroundSubmissions();
+    };
+    window.addEventListener("online", this.onlineRetryHandler);
   }
 
   /** @private */
@@ -497,6 +511,11 @@ export class LSFWrapper {
         annotation = first;
       } else if (isDefined(annotationID) && selectAnnotation) {
         annotation = this.annotations.find(({ pk }) => pk === annotationID);
+      } else if (selectAnnotation && this.annotations.length > 0) {
+        // When navigating back/forward in stream history we may not have explicit
+        // annotationID in URL/history; default to first existing annotation instead
+        // of creating a new one to keep submitted state visible.
+        annotation = first;
       } else if (showPredictions && this.predictions.length > 0 && !this.isInteractivePreannotations) {
         annotation = cs.addAnnotationFromPrediction(this.predictions[0]);
       } else {
@@ -686,6 +705,37 @@ export class LSFWrapper {
         type: "error",
       });
     }
+  }
+
+  async retryFailedBackgroundSubmissions() {
+    if (this.retryingBackgroundSubmissions) return;
+    if (!this.failedBackgroundSubmissions.length) return;
+
+    this.retryingBackgroundSubmissions = true;
+    const queued = [...this.failedBackgroundSubmissions];
+    const remaining = [];
+
+    for (const item of queued) {
+      let result;
+      try {
+        result = await item.submit(item.taskID, item.serializedAnnotation);
+      } catch {
+        result = { $meta: { status: 500 } };
+      }
+
+      const status = result?.$meta?.status;
+      const missingSubmitId = item.eventName === "submitAnnotation" && result?.id === undefined;
+
+      if (status >= 400 || status === undefined || missingSubmitId) {
+        remaining.push({ ...item, attempts: (item.attempts ?? 0) + 1 });
+        continue;
+      }
+
+      await item.onSuccess?.(result);
+    }
+
+    this.failedBackgroundSubmissions = remaining;
+    this.retryingBackgroundSubmissions = false;
   }
 
   /** @private */
@@ -1025,6 +1075,31 @@ export class LSFWrapper {
 
     const commentStore = this.lsf?.commentStore;
     let switchedTask = false;
+    const handleSuccessfulSubmit = async (result) => {
+      if (result && result.id !== undefined) {
+        const annotationId = result.id.toString();
+
+        currentAnnotation.updatePersonalKey(annotationId);
+        // Keep original task snapshot in sync even after optimistic navigation.
+        // Without this, going back may show task as unannotated and trigger duplicate submit attempts.
+        currentTask?.updateAnnotation?.(currentAnnotation);
+        if ("is_labeled" in (currentTask ?? {})) {
+          currentTask.is_labeled = true;
+        }
+
+        const eventData = annotationToServer(currentAnnotation);
+
+        this.datamanager.invoke(eventName, this.lsf, eventData, result);
+
+        if (
+          isFF(FF_DEV_2887) &&
+          ["submitAnnotation", "skipTask"].includes(eventName) &&
+          commentStore?.persistQueuedComments
+        ) {
+          await commentStore.persistQueuedComments();
+        }
+      }
+    };
 
     const switchToNextTaskIfReady = (task) => {
       if (!task) return false;
@@ -1068,25 +1143,22 @@ export class LSFWrapper {
 
       void saveUserLabelsPromise;
 
-      if (result && result.id !== undefined) {
-        const annotationId = result.id.toString();
+      const status = result?.$meta?.status;
+      const missingSubmitId = eventName === "submitAnnotation" && result?.id === undefined;
 
-        currentAnnotation.updatePersonalKey(annotationId);
-
-        const eventData = annotationToServer(currentAnnotation);
-
-        this.datamanager.invoke(eventName, this.lsf, eventData, result);
-
-        if (
-          isFF(FF_DEV_2887) &&
-          ["submitAnnotation", "skipTask"].includes(eventName) &&
-          commentStore?.persistQueuedComments
-        ) {
-          await commentStore.persistQueuedComments();
-        }
+      if (status >= 400 || status === undefined || missingSubmitId) {
+        this.failedBackgroundSubmissions.push({
+          eventName,
+          taskID,
+          serializedAnnotation,
+          submit,
+          attempts: 1,
+          onSuccess: async (retryResult) => await handleSuccessfulSubmit(retryResult),
+        });
+        return;
       }
 
-      const status = result?.$meta?.status;
+      await handleSuccessfulSubmit(result);
 
       // If prefetch couldn't provide a task in time, preserve existing behaviour
       // after successful submit by loading the next task once response arrives.
@@ -1320,6 +1392,10 @@ export class LSFWrapper {
   }
 
   destroy() {
+    if (this.onlineRetryHandler) {
+      window.removeEventListener("online", this.onlineRetryHandler);
+      this.onlineRetryHandler = null;
+    }
     this.lsfInstance?.destroy?.();
     this.lsfInstance = null;
   }
