@@ -250,6 +250,13 @@ export const DataStore = (modelName, { listItemType, apiMethod, properties, asso
           page_size: self.pageSize,
         };
 
+        // Task list summary counters are omitted in fast mode unless explicitly requested.
+        if (apiMethod === "tasks") {
+          params.include_annotation_counts = true;
+          params.include_user_annotation_counts = true;
+          params.include_prediction_counts = true;
+        }
+
         if (currentViewQuery) {
           params.query = currentViewQuery;
         } else {
