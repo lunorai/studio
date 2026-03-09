@@ -499,7 +499,6 @@ class AnnotationAPI(generics.RetrieveUpdateDestroyAPIView):
             'completed_by__last_name',
             'completed_by__avatar',
             'completed_by__email',
-            'completed_by__initials',
         )
 
         project_id = self.request.query_params.get('project')
@@ -674,7 +673,6 @@ class AnnotationsListAPI(GetParentObjectMixin, generics.ListCreateAPIView):
                 'completed_by__last_name',
                 'completed_by__avatar',
                 'completed_by__email',
-                'completed_by__initials',
             )
             .order_by('pk')
         )

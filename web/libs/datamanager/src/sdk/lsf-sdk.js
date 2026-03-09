@@ -300,13 +300,20 @@ export class LSFWrapper {
 
       const newTask = await this.withinLoadingState(async () => {
         let nextTask;
+        let loadedViaNextTaskAction = false;
 
         if (!isDefined(taskID)) {
+          const localNextTaskId = this.getLocalNextTaskId(this.task?.id);
+
+          if (isDefined(localNextTaskId)) {
+            nextTask = await this.prefetchTaskById(localNextTaskId);
+          }
+
           // If we already prefetched the next task, reuse it to avoid waiting
           // for an additional round-trip after submit.
-          if (this.prefetchedNextTask && this.prefetchedNextTask.id !== this.task?.id) {
+          if (!nextTask && this.prefetchedNextTask && this.prefetchedNextTask.id !== this.task?.id) {
             nextTask = this.consumePrefetchedNextTask();
-          } else if (this.prefetchInFlight) {
+          } else if (!nextTask && this.prefetchInFlight) {
             const prefetched = await this.prefetchInFlight;
 
             if (prefetched && prefetched.id !== this.task?.id) {
@@ -316,6 +323,7 @@ export class LSFWrapper {
 
           if (!nextTask) {
             nextTask = await tasks.loadNextTask();
+            loadedViaNextTaskAction = true;
           }
         } else {
           nextTask = await tasks.loadTask(taskID);
@@ -329,11 +337,19 @@ export class LSFWrapper {
 
         this.lsf.setFlags({ noTask });
 
-        return nextTask;
+        return { nextTask, loadedViaNextTaskAction };
       });
 
       // Add new data from received task
-      if (newTask) this.selectTask(newTask, annotationID, fromHistory);
+      if (newTask?.nextTask) {
+        this.selectTask(newTask.nextTask, annotationID, fromHistory);
+
+        // If current task came from next_task endpoint, immediately warm up the next one.
+        // This keeps prefetch chained behind server-driven stream navigation.
+        if (newTask.loadedViaNextTaskAction) {
+          this.startNextTaskPrefetch();
+        }
+      }
     };
 
     if (isFF(FF_DEV_2887) && this.lsf?.commentStore?.hasUnsaved) {
@@ -690,6 +706,10 @@ export class LSFWrapper {
       false,
       loadNext,
     );
+    if (result?.$meta?.status === 202) {
+      if (exitStream) return this.exitStream();
+      return;
+    }
     const status = result?.$meta?.status;
 
     this.showOperationToast(status, "Annotation saved successfully", "Annotation is not saved", result);
@@ -978,7 +998,115 @@ export class LSFWrapper {
     this.saveDraft();
     this.loadTask(prevTaskId, prevAnnotationId, true);
   };
+
+  /**
+   * Try instant transition to a ready prefetched task and submit current annotation in background.
+   * Falls back to regular flow when optimistic transition isn't safe.
+   * @private
+   */
+  async submitCurrentAnnotationOptimistically(eventName, submit, includeId = false) {
+    if (eventName !== "submitAnnotation") return null;
+    if (!this.labelStream || this.datamanager.isExplorer) return null;
+
+    const currentTask = this.task;
+    if (!currentTask) return null;
+
+    const currentAnnotation = this.currentAnnotation;
+
+    if (!currentAnnotation) return null;
+
+    const taskID = currentTask.id;
+    const unique_id = currentTask.unique_lock_id;
+    const serializedAnnotation = this.prepareData(currentAnnotation, { includeId });
+
+    if (unique_id) {
+      serializedAnnotation.unique_id = unique_id;
+    }
+
+    const commentStore = this.lsf?.commentStore;
+    let switchedTask = false;
+
+    const switchToNextTaskIfReady = (task) => {
+      if (!task) return false;
+      if (task.id === currentTask.id) return false;
+      if (this.task?.id !== currentTask.id) return false;
+
+      this.selectTask(task);
+      switchedTask = true;
+      return true;
+    };
+
+    const immediateNextTask = this.consumePrefetchedNextTask();
+
+    if (!switchToNextTaskIfReady(immediateNextTask)) {
+      if (!this.prefetchInFlight) {
+        this.startNextTaskPrefetch();
+      }
+
+      if (this.prefetchInFlight) {
+        void this.prefetchInFlight
+          .then((prefetched) => {
+            const cached = this.consumePrefetchedNextTask();
+            const resolvedTask = cached ?? prefetched;
+
+            switchToNextTaskIfReady(resolvedTask);
+          })
+          .catch(() => null);
+      }
+    }
+
+    void (async () => {
+      const saveUserLabelsPromise = this.saveUserLabels().catch(() => null);
+      let result;
+
+      try {
+        result = await submit(taskID, serializedAnnotation);
+      } catch (error) {
+        result = { $meta: { status: 500 } };
+        console.error("Background submit failed", error);
+      }
+
+      void saveUserLabelsPromise;
+
+      if (result && result.id !== undefined) {
+        const annotationId = result.id.toString();
+
+        currentAnnotation.updatePersonalKey(annotationId);
+
+        const eventData = annotationToServer(currentAnnotation);
+
+        this.datamanager.invoke(eventName, this.lsf, eventData, result);
+
+        if (
+          isFF(FF_DEV_2887) &&
+          ["submitAnnotation", "skipTask"].includes(eventName) &&
+          commentStore?.persistQueuedComments
+        ) {
+          await commentStore.persistQueuedComments();
+        }
+      }
+
+      const status = result?.$meta?.status;
+
+      // If prefetch couldn't provide a task in time, preserve existing behaviour
+      // after successful submit by loading the next task once response arrives.
+      if (status < 400 && !switchedTask && this.task?.id === currentTask.id) {
+        await this.loadTask();
+      }
+
+      this.showOperationToast(status, "Annotation saved successfully", "Annotation is not saved", result);
+    })();
+
+    return { $meta: { status: 202 } };
+  }
+
   async submitCurrentAnnotation(eventName, submit, includeId = false, loadNext = true) {
+    if (loadNext) {
+      const optimisticResult = await this.submitCurrentAnnotationOptimistically(eventName, submit, includeId);
+
+      if (optimisticResult) return optimisticResult;
+    }
+
     const { taskID, currentAnnotation } = this;
     const unique_id = this.task.unique_lock_id;
     const serializedAnnotation = this.prepareData(currentAnnotation, { includeId });
@@ -1128,25 +1256,31 @@ export class LSFWrapper {
     return result;
   }
 
+  getLocalNextTaskId(currentTaskId = this.task?.id) {
+    if (!isDefined(currentTaskId)) return undefined;
+
+    const currentNumericId = Number(currentTaskId);
+
+    if (Number.isFinite(currentNumericId)) {
+      // Prefer deterministic numeric progression and force direct task endpoint prefetch.
+      return currentNumericId + 1;
+    }
+
+    return undefined;
+  }
+
   startNextTaskPrefetch() {
     if (!this.labelStream || !this.shouldLoadNext()) return;
     if (this.prefetchInFlight || this.prefetchedNextTask) return;
 
     const currentTaskId = this.task?.id;
-    const labelStreamMode = localStorage.getItem("dm:labelstream:mode");
-    const isAllLabelStreamMode = labelStreamMode === "all";
-    const taskStore = this.datamanager.store.taskStore;
-    const taskList = taskStore?.list ?? [];
-    const currentIndex = taskList.findIndex((t) => t.id === currentTaskId);
-    const localNextTaskId = currentIndex >= 0 ? taskList[currentIndex + 1]?.id : undefined;
+    const localNextTaskId = this.getLocalNextTaskId(currentTaskId);
 
-    // In "Label All" mode, prefer local ordered-next prefetch by task id.
-    // It avoids the expensive next_task action path when we already know
-    // the immediate next task candidate from the current loaded list.
-    const prefetchPromise =
-      isAllLabelStreamMode && isDefined(localNextTaskId)
-        ? taskStore.loadTask(localNextTaskId, { select: false })
-        : taskStore.loadNextTask({ select: false });
+    // Background prefetch must use direct task endpoint to avoid
+    // next_task returning the current task before submit is committed.
+    if (!isDefined(localNextTaskId)) return;
+
+    const prefetchPromise = this.prefetchTaskById(localNextTaskId);
 
     this.prefetchInFlight = Promise.resolve(prefetchPromise)
       .then((task) => {
@@ -1161,6 +1295,21 @@ export class LSFWrapper {
       .finally(() => {
         this.prefetchInFlight = null;
       });
+  }
+
+  async prefetchTaskById(taskID) {
+    if (!isDefined(taskID)) return null;
+
+    const params = { taskID, interaction: "labelstream" };
+    const projectId = this.project?.id;
+
+    if (isDefined(projectId)) params.project = projectId;
+
+    const taskData = await this.datamanager.apiCall("task", params);
+
+    if (!taskData || taskData?.status === 404 || taskData?.error) return null;
+
+    return this.datamanager.store.taskStore.applyTaskSnapshot(taskData, taskID);
   }
 
   consumePrefetchedNextTask() {

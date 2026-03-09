@@ -175,6 +175,8 @@ export const create = (columns) => {
         const taskParams = { taskID };
         if (isLabelStream) {
           taskParams.interaction = "labelstream";
+          const projectId = getRoot(self).project?.id;
+          if (isDefined(projectId)) taskParams.project = projectId;
         }
 
         const taskData = yield self.root.apiCall("task", taskParams);
