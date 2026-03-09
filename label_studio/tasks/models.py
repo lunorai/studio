@@ -741,15 +741,14 @@ class Annotation(AnnotationMixin, models.Model):
             summary.remove_created_annotations_and_labels([self])
 
     def update_task(self):
-        update_fields = ['updated_at']
-
-        # updated_by
+        # Use direct update to avoid running Task save signals on every
+        # annotation/prediction write. We only touch bookkeeping fields here.
+        update_kwargs = {'updated_at': now()}
         request = get_current_request()
         if request:
-            self.task.updated_by = request.user
-            update_fields.append('updated_by')
+            update_kwargs['updated_by_id'] = request.user.id
 
-        self.task.save(update_fields=update_fields)
+        Task.objects.filter(id=self.task_id).update(**update_kwargs)
 
     def save(self, *args, update_fields=None, **kwargs):
         request = get_current_request()
@@ -985,15 +984,14 @@ class Prediction(models.Model):
             raise ValidationError(f'Incorrect format {type(result)} for prediction result {result}')
 
     def update_task(self):
-        update_fields = ['updated_at']
-
-        # updated_by
+        # Use direct update to avoid running Task save signals on every
+        # annotation/prediction write. We only touch bookkeeping fields here.
+        update_kwargs = {'updated_at': now()}
         request = get_current_request()
         if request:
-            self.task.updated_by = request.user
-            update_fields.append('updated_by')
+            update_kwargs['updated_by_id'] = request.user.id
 
-        self.task.save(update_fields=update_fields)
+        Task.objects.filter(id=self.task_id).update(**update_kwargs)
 
     def save(self, *args, update_fields=None, **kwargs):
         if self.project_id is None and self.task_id:

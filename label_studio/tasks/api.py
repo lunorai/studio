@@ -711,9 +711,8 @@ class AnnotationsListAPI(GetParentObjectMixin, generics.ListCreateAPIView):
         # save stats about how well annotator annotations coincide with current prediction
         # only for finished task annotations
         if result is not None:
-            prediction = Prediction.objects.filter(task=task, model_version=task.project.model_version)
-            if prediction.exists():
-                prediction = prediction.first()
+            prediction = Prediction.objects.filter(task=task, model_version=task.project.model_version).first()
+            if prediction is not None:
                 prediction_ser = PredictionSerializer(prediction).data
             else:
                 logger.debug(f'User={self.request.user}: there are no predictions for task={task}')
@@ -744,7 +743,7 @@ class AnnotationsListAPI(GetParentObjectMixin, generics.ListCreateAPIView):
 
         logger.debug(f'Save activity for user={self.request.user}')
         self.request.user.activity_at = timezone.now()
-        self.request.user.save()
+        self.request.user.save(update_fields=['activity_at'])
 
         # Release task if it has been taken at work (it should be taken by the same user, or it makes sentry error
         logger.debug(f'User={user} releases task={task}')

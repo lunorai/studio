@@ -70,6 +70,21 @@ export class LSFWrapper {
   /** @type {boolean} */
   isInteractivePreannotations = false;
 
+  /** @type {string|null} */
+  lastSavedUserLabelsPayload = null;
+
+  /** @type {boolean} */
+  userLabelsLoaded = false;
+
+  /** @type {Promise<void>|null} */
+  userLabelsLoadingPromise = null;
+
+  /** @type {import("../stores/DataStores/tasks").TaskModel|null} */
+  prefetchedNextTask = null;
+
+  /** @type {Promise<any>|null} */
+  prefetchInFlight = null;
+
   /** @type {function} */
   interfacesModifier = (interfaces) => interfaces;
 
@@ -287,7 +302,21 @@ export class LSFWrapper {
         let nextTask;
 
         if (!isDefined(taskID)) {
-          nextTask = await tasks.loadNextTask();
+          // If we already prefetched the next task, reuse it to avoid waiting
+          // for an additional round-trip after submit.
+          if (this.prefetchedNextTask && this.prefetchedNextTask.id !== this.task?.id) {
+            nextTask = this.consumePrefetchedNextTask();
+          } else if (this.prefetchInFlight) {
+            const prefetched = await this.prefetchInFlight;
+
+            if (prefetched && prefetched.id !== this.task?.id) {
+              nextTask = this.consumePrefetchedNextTask() ?? prefetched;
+            }
+          }
+
+          if (!nextTask) {
+            nextTask = await tasks.loadNextTask();
+          }
         } else {
           nextTask = await tasks.loadTask(taskID);
         }
@@ -336,9 +365,12 @@ export class LSFWrapper {
       this.task.mergeAnnotations(annotations);
     }
 
-    this.loadUserLabels();
+    this.loadUserLabelsIfNeeded();
 
     this.setLSFTask(task, annotationID, fromHistory);
+
+    // Keep a warm next task in background for smoother labelstream navigation.
+    this.startNextTaskPrefetch();
   }
 
   setLSFTask(task, annotationID, fromHistory, selectPrediction = false) {
@@ -502,7 +534,13 @@ export class LSFWrapper {
 
     if (!body.length) return;
 
+    const payload = JSON.stringify(body);
+
+    // Avoid posting unchanged user labels on every submit/update.
+    if (payload === this.lastSavedUserLabelsPayload) return;
+
     await this.datamanager.apiCall("saveUserLabels", {}, { body });
+    this.lastSavedUserLabelsPayload = payload;
   };
 
   async loadUserLabels() {
@@ -528,6 +566,18 @@ export class LSFWrapper {
     }
 
     this.lsf.userLabels.init(controls);
+    this.userLabelsLoaded = true;
+  }
+
+  async loadUserLabelsIfNeeded() {
+    if (this.userLabelsLoaded) return;
+    if (this.userLabelsLoadingPromise) return this.userLabelsLoadingPromise;
+
+    this.userLabelsLoadingPromise = this.loadUserLabels().finally(() => {
+      this.userLabelsLoadingPromise = null;
+    });
+
+    return this.userLabelsLoadingPromise;
   }
 
   onLabelStudioLoad = async (ls) => {
@@ -542,7 +592,7 @@ export class LSFWrapper {
 
     this.lsf.setTaskHistory(_taskHistory);
 
-    await this.loadUserLabels();
+    await this.loadUserLabelsIfNeeded();
 
     if (this.canPreloadTask && isFF(FF_DEV_1752)) {
       await this.preloadTask();
@@ -939,13 +989,24 @@ export class LSFWrapper {
 
     this.setLoading(true);
 
-    await this.saveUserLabels();
+    // Do not block submit on user-labels persistence; labels are independent
+    // and can be persisted in parallel.
+    const saveUserLabelsPromise = this.saveUserLabels().catch(() => null);
+
+    // Pipeline optimization: in label stream, start fetching the next task
+    // while current annotation submit is in flight.
+    if (loadNext && !this.datamanager.isExplorer) {
+      this.startNextTaskPrefetch();
+    }
 
     const result = await this.withinLoadingState(async () => {
       const result = await submit(taskID, serializedAnnotation);
 
       return result;
     });
+
+    // Keep user-label persistence out of the critical path.
+    void saveUserLabelsPromise;
 
     if (result && result.id !== undefined) {
       const annotationId = result.id.toString();
@@ -1065,6 +1126,48 @@ export class LSFWrapper {
     this.setLoading(false);
 
     return result;
+  }
+
+  startNextTaskPrefetch() {
+    if (!this.labelStream || !this.shouldLoadNext()) return;
+    if (this.prefetchInFlight || this.prefetchedNextTask) return;
+
+    const currentTaskId = this.task?.id;
+    const labelStreamMode = localStorage.getItem("dm:labelstream:mode");
+    const isAllLabelStreamMode = labelStreamMode === "all";
+    const taskStore = this.datamanager.store.taskStore;
+    const taskList = taskStore?.list ?? [];
+    const currentIndex = taskList.findIndex((t) => t.id === currentTaskId);
+    const localNextTaskId = currentIndex >= 0 ? taskList[currentIndex + 1]?.id : undefined;
+
+    // In "Label All" mode, prefer local ordered-next prefetch by task id.
+    // It avoids the expensive next_task action path when we already know
+    // the immediate next task candidate from the current loaded list.
+    const prefetchPromise =
+      isAllLabelStreamMode && isDefined(localNextTaskId)
+        ? taskStore.loadTask(localNextTaskId, { select: false })
+        : taskStore.loadNextTask({ select: false });
+
+    this.prefetchInFlight = Promise.resolve(prefetchPromise)
+      .then((task) => {
+        // Ignore accidental same-task responses.
+        if (task && task.id !== currentTaskId) {
+          this.prefetchedNextTask = task;
+        }
+
+        return this.prefetchedNextTask;
+      })
+      .catch(() => null)
+      .finally(() => {
+        this.prefetchInFlight = null;
+      });
+  }
+
+  consumePrefetchedNextTask() {
+    const task = this.prefetchedNextTask;
+
+    this.prefetchedNextTask = null;
+    return task;
   }
 
   destroy() {
