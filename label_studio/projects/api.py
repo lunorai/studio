@@ -923,12 +923,19 @@ class ProjectNextTaskAPI(generics.RetrieveAPIView):
         # If per-user batch size is configured, restrict the queue to the
         # circular batch assigned to this user.
         assignment = get_or_create_user_assignment(request.user, project)
+        assigned_flag = assignment is not None
         if assignment is not None:
             prepared_tasks = prepared_tasks.filter(
                 id__in=assignment.tasks.values_list('id', flat=True)
             )
 
-        next_task, queue_info = get_next_task(request.user, prepared_tasks, project, dm_queue)
+        next_task, queue_info = get_next_task(
+            request.user,
+            prepared_tasks,
+            project,
+            dm_queue,
+            assigned_flag=assigned_flag,
+        )
 
         if next_task is None:
             raise NotFound(f'There are no tasks for {request.user}')

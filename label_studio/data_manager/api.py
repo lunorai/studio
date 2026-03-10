@@ -807,6 +807,9 @@ class ProjectActionsAPI(APIView):
         # avoid expensive Data Manager queryset preparation for plain label stream mode.
         if action_id == 'next_task' and not filters_ordering_selected_items_exist(request.data):
             queryset = Task.objects.filter(project=project).order_by('id')
+            assignment = get_or_create_user_assignment(request.user, project)
+            if assignment is not None:
+                queryset = queryset.filter(id__in=assignment.tasks.values_list('id', flat=True))
         else:
             queryset = get_prepared_queryset(request, project)
 

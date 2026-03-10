@@ -142,6 +142,7 @@ export const AppStore = types
   .volatile(() => ({
     needsDataFetch: false,
     projectFetch: false,
+    projectFetchKey: null,
     requestsInFlight: new Map(),
   }))
   .actions((self) => ({
@@ -482,8 +483,6 @@ export const AppStore = types
     },
 
     fetchProject: flow(function* (options = {}) {
-      self.projectFetch = options.force === true;
-
       const isTimer = options.interaction === "timer";
       const params =
         options && options.interaction
@@ -502,6 +501,14 @@ export const AppStore = types
                 : null),
             }
           : null;
+      const requestKey = JSON.stringify(params ?? {});
+
+      if (self.projectFetch && self.projectFetchKey === requestKey && options.force !== true) {
+        return true;
+      }
+
+      self.projectFetch = options.force === true;
+      self.projectFetchKey = requestKey;
 
       try {
         const newProject = yield self.apiCall("project", params);
@@ -537,8 +544,11 @@ export const AppStore = types
           });
         }
         return false;
+      } finally {
+        self.projectFetch = false;
+        self.projectFetchKey = null;
       }
-      self.projectFetch = false;
+
       return true;
     }),
 

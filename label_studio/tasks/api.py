@@ -19,6 +19,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema
 from projects.functions.stream_history import fill_history_annotation
+from projects.functions.user_batch_assignment import get_or_create_user_assignment
 from projects.models import Project
 from rest_framework import generics, viewsets
 from rest_framework.exceptions import PermissionDenied
@@ -340,11 +341,21 @@ class TaskAPI(generics.RetrieveUpdateDestroyAPIView):
         dm_fast = bool_from_request(self.request.GET, 'dm_fast', True)
         task_id = self.request.parser_context['kwargs'].get('pk')
         project = self.request.query_params.get('project') or self.request.data.get('project')
+        is_labelstream = self.request.query_params.get('interaction') == 'labelstream'
 
         if dm_fast:
             queryset = Task.objects.filter(pk=task_id, project__organization=self.request.user.active_organization)
             if project:
                 queryset = queryset.filter(project_id=project)
+
+            if is_labelstream and project:
+                project_obj = generics.get_object_or_404(
+                    Project.objects.filter(organization=self.request.user.active_organization),
+                    pk=project,
+                )
+                assignment = get_or_create_user_assignment(self.request.user, project_obj)
+                if assignment is not None:
+                    queryset = queryset.filter(id__in=assignment.tasks.values_list('id', flat=True))
 
             queryset = queryset.select_related('project', 'updated_by')
 
@@ -356,6 +367,12 @@ class TaskAPI(generics.RetrieveUpdateDestroyAPIView):
             return queryset
 
         task = generics.get_object_or_404(Task, pk=task_id)
+        if is_labelstream:
+            project_obj = task.project
+            assignment = get_or_create_user_assignment(self.request.user, project_obj)
+            if assignment is not None and not assignment.tasks.filter(pk=task.pk).exists():
+                queryset = Task.objects.none()
+                return queryset
         review = bool_from_request(self.request.GET, 'review', False)
         selected = {'all': False, 'included': [self.kwargs.get('pk')]}
         if review:

@@ -5,6 +5,7 @@ import logging
 from core.permissions import all_permissions
 from data_manager.functions import filters_ordering_selected_items_exist
 from projects.functions.next_task import get_next_task
+from projects.functions.user_batch_assignment import get_or_create_user_assignment
 from rest_framework.exceptions import NotFound
 from tasks.serializers import NextTaskSerializer
 
@@ -21,7 +22,18 @@ def next_task(project, queryset, **kwargs):
 
     request = kwargs['request']
     dm_queue = filters_ordering_selected_items_exist(request.data)
-    next_task, queue_info = get_next_task(request.user, queryset, project, dm_queue)
+    assignment = get_or_create_user_assignment(request.user, project)
+    assigned_flag = assignment is not None
+    if assignment is not None:
+        queryset = queryset.filter(id__in=assignment.tasks.values_list('id', flat=True))
+
+    next_task, queue_info = get_next_task(
+        request.user,
+        queryset,
+        project,
+        dm_queue,
+        assigned_flag=assigned_flag,
+    )
 
     if next_task is None:
         raise NotFound(f'There are no tasks for {request.user}')

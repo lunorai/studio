@@ -1331,11 +1331,12 @@ export class LSFWrapper {
   getLocalNextTaskId(currentTaskId = this.task?.id) {
     if (!isDefined(currentTaskId)) return undefined;
 
-    const currentNumericId = Number(currentTaskId);
+    const taskStore = this.datamanager.store.taskStore;
+    const taskList = taskStore?.list ?? [];
+    const currentIndex = taskList.findIndex((task) => String(task.id) === String(currentTaskId));
 
-    if (Number.isFinite(currentNumericId)) {
-      // Prefer deterministic numeric progression and force direct task endpoint prefetch.
-      return currentNumericId + 1;
+    if (currentIndex >= 0) {
+      return taskList[currentIndex + 1]?.id;
     }
 
     return undefined;

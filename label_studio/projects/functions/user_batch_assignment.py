@@ -29,8 +29,12 @@ def get_or_create_user_assignment(user: User, project: Project) -> Optional[User
     if batch_size <= 0:
         # No special batch behaviour configured for this project
         return None
+
+    total = Task.objects.filter(project=project).count()
+    expected_count = min(batch_size, total) if total > 0 else 0
+
     assignment, created = UserTaskAssignment.objects.get_or_create(user=user, project=project)
-    if not created and assignment.tasks.exists():
+    if not created and assignment.tasks.count() == expected_count:
         return assignment
 
     with transaction.atomic():
@@ -39,12 +43,12 @@ def get_or_create_user_assignment(user: User, project: Project) -> Optional[User
             user=user,
             project=project,
         )
-        if not created and assignment.tasks.exists():
+        if not created and assignment.tasks.count() == expected_count:
             return assignment
 
         tasks_qs = Task.objects.filter(project=project).order_by('id').values_list('id', flat=True)
-        total = tasks_qs.count()
         if total == 0:
+            assignment.tasks.clear()
             return assignment
 
         start = project.global_task_index % total
@@ -64,4 +68,3 @@ def get_or_create_user_assignment(user: User, project: Project) -> Optional[User
         project.save(update_fields=['global_task_index'])
 
     return assignment
-
