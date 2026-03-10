@@ -1336,7 +1336,19 @@ export class LSFWrapper {
     const currentIndex = taskList.findIndex((task) => String(task.id) === String(currentTaskId));
 
     if (currentIndex >= 0) {
-      return taskList[currentIndex + 1]?.id;
+      const orderedNextId = taskList[currentIndex + 1]?.id;
+
+      if (isDefined(orderedNextId)) return orderedNextId;
+    }
+
+    const currentNumericId = Number(currentTaskId);
+
+    if (Number.isFinite(currentNumericId)) {
+      const nextGreaterTask = taskList
+        .filter((task) => Number.isFinite(Number(task.id)) && Number(task.id) > currentNumericId)
+        .sort((a, b) => Number(a.id) - Number(b.id))[0];
+
+      if (nextGreaterTask) return nextGreaterTask.id;
     }
 
     return undefined;
@@ -1347,7 +1359,17 @@ export class LSFWrapper {
     if (this.prefetchInFlight || this.prefetchedNextTask) return;
 
     const currentTaskId = this.task?.id;
-    const localNextTaskId = this.getLocalNextTaskId(currentTaskId);
+    let localNextTaskId = this.getLocalNextTaskId(currentTaskId);
+
+    // Force a direct task prefetch attempt even if the local list cannot
+    // resolve the next item yet. Backend labelstream restrictions will
+    // reject out-of-batch tasks safely.
+    if (!isDefined(localNextTaskId)) {
+      const currentNumericId = Number(currentTaskId);
+      if (Number.isFinite(currentNumericId)) {
+        localNextTaskId = currentNumericId + 1;
+      }
+    }
 
     // Background prefetch must use direct task endpoint to avoid
     // next_task returning the current task before submit is committed.
