@@ -45,7 +45,7 @@ export const ProjectsPage = () => {
   const [totalItems, setTotalItems] = useState(1);
   const setContextProps = useContextProps();
   const defaultPageSize = Number.parseInt(
-    localStorage.getItem("pages:projects-list") ?? 30
+    localStorage.getItem("pages:projects-list") ?? 30,
   );
 
   const [modal, setModal] = React.useState(false);
@@ -59,7 +59,7 @@ export const ProjectsPage = () => {
 
   const fetchProjects = async (
     page = currentPage,
-    pageSize = defaultPageSize
+    pageSize = defaultPageSize,
   ) => {
     setNetworkState("loading");
     abortController.renew(); // Cancel any in flight requests
@@ -106,12 +106,10 @@ export const ProjectsPage = () => {
           include: [
             "id",
             "description",
-            "num_tasks_with_annotations",
             "task_number",
             "skipped_annotations_number",
             "total_annotations_number",
             "total_predictions_number",
-            "ground_truth_number",
             "finished_task_number",
             "challenge_id",
             "round",
@@ -133,7 +131,7 @@ export const ProjectsPage = () => {
               ...prevProject,
               ...project,
             };
-          })
+          }),
         );
       }
     }

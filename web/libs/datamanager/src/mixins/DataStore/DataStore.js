@@ -250,6 +250,13 @@ export const DataStore = (modelName, { listItemType, apiMethod, properties, asso
           page_size: self.pageSize,
         };
 
+        // Task list summary counters are omitted in fast mode unless explicitly requested.
+        if (apiMethod === "tasks") {
+          params.include_annotation_counts = true;
+          params.include_user_annotation_counts = true;
+          params.include_prediction_counts = true;
+        }
+
         if (currentViewQuery) {
           params.query = currentViewQuery;
         } else {
@@ -299,15 +306,13 @@ export const DataStore = (modelName, { listItemType, apiMethod, properties, asso
       // Public fetch function that uses debouncing
       fetch({ id, query, pageNumber = null, reload = false, interaction, pageSize } = {}) {
         const params = { id, query, pageNumber, reload, interaction, pageSize };
-        const root = getRoot(self);
-        // Only use debouncing for virtual tabs that use queries (like search/filter tabs)
-        const currentView = root.viewsStore.selected;
-        // const isVirtualTab = currentView?.virtual && currentView?.query;
+        const shouldDebounce = interaction === "filter" || interaction === "ordering";
 
-        // Initialize debounced function if not already done
+        if (!shouldDebounce) {
+          return self._performFetch(params);
+        }
+
         self.initDebouncedFetch();
-
-        // For virtual tabs with queries, use debounced version
         return self.debouncedFetch(params);
       },
 

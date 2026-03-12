@@ -39,7 +39,7 @@ interface PaginationProps {
   onPageLoad?: (pageNumber: number, pageSize: number) => Promise<void>;
 }
 
-export const DEFAULT_PAGE_SIZE = 30;
+export const DEFAULT_PAGE_SIZE = 15;
 
 const isSystemEvent = (e: KeyboardEvent<HTMLInputElement>): boolean => {
   return (
@@ -51,7 +51,10 @@ const isSystemEvent = (e: KeyboardEvent<HTMLInputElement>): boolean => {
   );
 };
 
-export const getStoredPageSize = (name?: string, defaultValue?: number): number | undefined => {
+export const getStoredPageSize = (
+  name?: string,
+  defaultValue?: number,
+): number | undefined => {
   const value = localStorage.getItem(`pages:${name}`);
 
   if (isDefined(value)) {
@@ -95,7 +98,10 @@ export const Pagination: FC<PaginationProps> = forwardRef<any, PaginationProps>(
 
     const [pageSize, setPageSize] = useValueTracker(
       props.pageSize,
-      getStoredPageSize(finalName) ?? defaultPageSize ?? pageSizeOptions?.[0] ?? 10,
+      getStoredPageSize(finalName) ??
+        defaultPageSize ??
+        pageSizeOptions?.[0] ??
+        10,
     );
 
     const totalPages = useMemo(() => {
@@ -149,7 +155,11 @@ export const Pagination: FC<PaginationProps> = forwardRef<any, PaginationProps>(
 
         urlParams.set(props.urlParamName, page.toString());
 
-        const historyArgs: [any, string, string] = [{ page }, "", `${location.pathname}?${urlParams.toString()}`];
+        const historyArgs: [any, string, string] = [
+          { page },
+          "",
+          `${location.pathname}?${urlParams.toString()}`,
+        ];
 
         if (options.replace) {
           history.replaceState(...historyArgs);
@@ -161,7 +171,9 @@ export const Pagination: FC<PaginationProps> = forwardRef<any, PaginationProps>(
     );
 
     const applyPageNumberFromEvent = (
-      e: React.KeyboardEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>,
+      e:
+        | React.KeyboardEvent<HTMLInputElement>
+        | React.FocusEvent<HTMLInputElement>,
     ) => {
       const result = Number.parseInt((e.target as HTMLInputElement).value);
 
@@ -196,7 +208,9 @@ export const Pagination: FC<PaginationProps> = forwardRef<any, PaginationProps>(
         if (!props.urlParamName) return;
 
         const urlParams = new URLSearchParams(location.search);
-        const pageNumberFromURL = Number.parseInt(urlParams.get(props.urlParamName) ?? "");
+        const pageNumberFromURL = Number.parseInt(
+          urlParams.get(props.urlParamName) ?? "",
+        );
 
         if (!isNaN(pageNumberFromURL) && pageNumberFromURL !== currentPage) {
           setCurrentPage(pageNumberFromURL);
@@ -217,7 +231,11 @@ export const Pagination: FC<PaginationProps> = forwardRef<any, PaginationProps>(
     }, []);
 
     return totalPages > 1 || alwaysVisible ? (
-      <Block name="pagination-dm" mod={{ disabled, size, waiting }} style={props.style}>
+      <Block
+        name="pagination-dm"
+        mod={{ disabled, size, waiting }}
+        style={props.style}
+      >
         {props.label && isDefined(pageSize) && showTitle && (
           <Elem name="label">
             {props.label}: {visibleItems.start}-{visibleItems.end}
@@ -251,7 +269,10 @@ export const Pagination: FC<PaginationProps> = forwardRef<any, PaginationProps>(
                     setInputMode(false);
                   } else if (e.code === "Enter") {
                     applyPageNumberFromEvent(e);
-                  } else if (e.code.match(/[0-9]/) === null && !isSystemEvent(e)) {
+                  } else if (
+                    e.code.match(/[0-9]/) === null &&
+                    !isSystemEvent(e)
+                  ) {
                     e.preventDefault();
                     e.stopPropagation();
                   }
@@ -298,7 +319,10 @@ export const Pagination: FC<PaginationProps> = forwardRef<any, PaginationProps>(
             <Select
               size={size}
               value={pageSize}
-              options={pageSizeOptions.map((v) => ({ label: `${v} per page`, value: v }))}
+              options={pageSizeOptions.map((v) => ({
+                label: `${v} per page`,
+                value: v,
+              }))}
               onChange={(val: any) => {
                 const newPageSize = Number.parseInt(val);
 
@@ -332,7 +356,9 @@ export const usePage = (paramName: string, initialValue = 1) => {
   const params = new URLSearchParams(location.search);
   const urlValue = params.get(paramName);
 
-  const [page, setPage] = useState(urlValue ? Number.parseInt(urlValue) : initialValue);
+  const [page, setPage] = useState(
+    urlValue ? Number.parseInt(urlValue) : initialValue,
+  );
 
   return [page, setPage];
 };
@@ -341,7 +367,9 @@ export const usePageSize = (paramName: string, initialValue = 1) => {
   const params = new URLSearchParams(location.search);
   const urlValue = params.get(paramName);
 
-  const [pageSize, setPageSize] = useState(urlValue ? Number.parseInt(urlValue) : initialValue);
+  const [pageSize, setPageSize] = useState(
+    urlValue ? Number.parseInt(urlValue) : initialValue,
+  );
 
   return [pageSize, setPageSize];
 };

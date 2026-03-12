@@ -462,6 +462,25 @@ class PredictionsDMFieldSerializer(serializers.SerializerMethodField):
 
 
 class DataManagerTaskSerializer(TaskSerializer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.context.get('dm_fast'):
+            # Remove the most expensive computed fields for fast listing.
+            for field in (
+                'annotators',
+                'file_upload',
+                'storage_filename',
+                'updated_by',
+                'annotations_results',
+                'predictions_results',
+                'annotations_ids',
+                'predictions_model_versions',
+                'avg_lead_time',
+                'draft_exists',
+                'predictions_score',
+            ):
+                self.fields.pop(field, None)
+
     predictions = PredictionsDMFieldSerializer(required=False, read_only=True)
     annotations = AnnotationsDMFieldSerializer(required=False, many=True, default=[], read_only=True)
     drafts = AnnotationDraftDMFieldSerializer(required=False, read_only=True)

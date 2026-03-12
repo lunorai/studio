@@ -40,6 +40,9 @@ export const CurrentTask = observer(({ store }) => {
 
   const historyEnabled = store.hasInterface("topbar:prevnext");
   const showCounter = store.hasInterface("topbar:task-counter");
+  const isLastTaskInQueue = isFF(FF_TASK_COUNT_FIX)
+    ? store.queueTotal > 0 && store.queuePosition >= store.queueTotal
+    : store.taskHistory.length > 0 && currentIndex >= store.taskHistory.length;
 
   // @todo some interface?
   let canPostpone =
@@ -90,17 +93,19 @@ export const CurrentTask = observer(({ store }) => {
             >
               <IconChevronLeft />
             </Button>
-            <Button
-              data-testid="next-task"
-              aria-label="Next task"
-              look="string"
-              disabled={!store.canGoNextTask && !canPostpone}
-              onClick={store.canGoNextTask ? store.nextTask : store.postponeTask}
-              style={{ background: !isFF(FF_DEV_3873) && "none", backgroundColor: isFF(FF_DEV_3873) && "none" }}
-              variant={!store.canGoNextTask && canPostpone ? "primary" : "neutral"}
-            >
-              <IconChevronRight />
-            </Button>
+            {!isLastTaskInQueue && (
+              <Button
+                data-testid="next-task"
+                aria-label="Next task"
+                look="string"
+                disabled={!store.canGoNextTask && !canPostpone}
+                onClick={store.canGoNextTask ? store.nextTask : store.postponeTask}
+                style={{ background: !isFF(FF_DEV_3873) && "none", backgroundColor: isFF(FF_DEV_3873) && "none" }}
+                variant={!store.canGoNextTask && canPostpone ? "primary" : "neutral"}
+              >
+                <IconChevronRight />
+              </Button>
+            )}
           </Elem>
         )}
       </Block>

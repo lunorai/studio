@@ -29,8 +29,12 @@ def get_or_create_user_assignment(user: User, project: Project) -> Optional[User
     if batch_size <= 0:
         # No special batch behaviour configured for this project
         return None
+
+    total = Task.objects.filter(project=project).count()
+    expected_count = min(batch_size, total) if total > 0 else 0
+
     assignment, created = UserTaskAssignment.objects.get_or_create(user=user, project=project)
-    if not created and assignment.tasks.exists():
+    if not created and assignment.tasks.count() == expected_count:
         return assignment
 
     with transaction.atomic():
@@ -39,20 +43,24 @@ def get_or_create_user_assignment(user: User, project: Project) -> Optional[User
             user=user,
             project=project,
         )
-        if not created and assignment.tasks.exists():
+        if not created and assignment.tasks.count() == expected_count:
             return assignment
 
-        tasks_qs = Task.objects.filter(project=project).order_by('id').only('id')
-        task_ids = list(tasks_qs.values_list('id', flat=True))
-        total = len(task_ids)
+        tasks_qs = Task.objects.filter(project=project).order_by('id').values_list('id', flat=True)
         if total == 0:
+            assignment.tasks.clear()
             return assignment
 
         start = project.global_task_index % total
-        end = start + batch_size
-
-        indices = [(i % total) for i in range(start, end)]
-        selected_ids = [task_ids[i] for i in indices]
+        # Fetch only the required task-id window(s) instead of loading all task ids.
+        selected_ids = []
+        remaining = batch_size
+        cursor = start
+        while remaining > 0:
+            chunk_size = min(remaining, total - cursor)
+            selected_ids.extend(list(tasks_qs[cursor : cursor + chunk_size]))
+            remaining -= chunk_size
+            cursor = 0
 
         assignment.tasks.set(Task.objects.filter(id__in=selected_ids))
 
@@ -60,5 +68,3 @@ def get_or_create_user_assignment(user: User, project: Project) -> Optional[User
         project.save(update_fields=['global_task_index'])
 
     return assignment
-
-

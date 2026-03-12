@@ -360,7 +360,36 @@ def evaluate_predictions(tasks):
 
 
 def filters_ordering_selected_items_exist(data):
-    return data.get('filters') or data.get('ordering') or data.get('selectedItems')
+    if not isinstance(data, dict):
+        return False
+
+    filters = data.get('filters')
+    if isinstance(filters, dict):
+        if filters.get('items'):
+            return True
+    elif filters:
+        return True
+
+    ordering = data.get('ordering')
+    if ordering:
+        return True
+
+    selected_items = data.get('selectedItems')
+    if isinstance(selected_items, dict):
+        selected_all = selected_items.get('all')
+        included = selected_items.get('included') or []
+        excluded = selected_items.get('excluded') or []
+        selected_list = selected_items.get('list') or []
+
+        if selected_all is False and included:
+            return True
+        if selected_all is True and excluded:
+            return True
+        if selected_list:
+            return True
+        return False
+
+    return bool(selected_items)
 
 
 def custom_filter_expressions(*args, **kwargs):

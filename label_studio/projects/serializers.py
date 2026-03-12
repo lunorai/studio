@@ -105,12 +105,29 @@ class ProjectSerializer(FlexFieldsModelSerializer):
         except KeyError:
             return next(iter(self.context['user_cache']))
 
-    @staticmethod
-    def get_config_has_control_tags(project) -> bool:
-        return len(project.get_parsed_config()) > 0
+    def _is_fast_request(self):
+        if self.context.get('dm_fast'):
+            return True
+
+        request = self.context.get('request')
+        if request is None:
+            return False
+
+        value = str(request.query_params.get('dm_fast', '')).lower()
+        if value in {'1', 'true', 'yes', 'y'}:
+            return True
+
+        return '/api/dm/project' in request.path
 
     @staticmethod
-    def get_config_suitable_for_bulk_annotation(project) -> bool:
+    def get_config_has_control_tags(project) -> bool:
+        parsed = project.parsed_label_config or project.get_parsed_config()
+        return len(parsed) > 0
+
+    def get_config_suitable_for_bulk_annotation(self, project) -> bool:
+        if self._is_fast_request():
+            return False
+
         li = LabelInterface(project.label_config)
 
         # List of tags that should not be present
@@ -166,7 +183,7 @@ class ProjectSerializer(FlexFieldsModelSerializer):
 
     @staticmethod
     def get_parsed_label_config(project):
-        return project.get_parsed_config()
+        return project.parsed_label_config or project.get_parsed_config()
 
     def get_start_training_on_annotation_update(self, instance) -> bool:
         # FIXME: remake this logic with start_training_on_annotation_update
@@ -291,6 +308,9 @@ class ProjectSerializer(FlexFieldsModelSerializer):
         return super().update(instance, validated_data)
 
     def get_queue_total(self, project) -> int:
+        if self._is_fast_request():
+            return 0
+
         remain = project.tasks.filter(
             Q(is_labeled=False) & ~Q(annotations__completed_by_id=self.user_id)
             | Q(annotations__completed_by_id=self.user_id)
@@ -298,6 +318,9 @@ class ProjectSerializer(FlexFieldsModelSerializer):
         return remain.count()
 
     def get_queue_done(self, project) -> int:
+        if self._is_fast_request():
+            return 0
+
         tasks_filter = {
             'project': project,
             'annotations__completed_by_id': self.user_id,

@@ -84,11 +84,7 @@ export const DataManagerPage = ({ ...props }) => {
 
     setLoading(true);
 
-    const mlBackends = await api.callApi("mlBackends", {
-      params: { project: project.id },
-    });
-
-    const interactiveBacked = (mlBackends ?? []).find(({ is_interactive }) => is_interactive);
+    const interactiveBacked = null;
 
     const dataManager = (dataManagerRef.current =
       dataManagerRef.current ??

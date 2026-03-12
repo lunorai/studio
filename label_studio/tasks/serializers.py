@@ -240,9 +240,10 @@ class BaseTaskSerializer(FlexFieldsModelSerializer):
             if self.context.get('resolve_uri', False):
                 instance.data = instance.resolve_uri(instance.data, project)
 
-            # resolve $undefined$ key in task data
-            data = instance.data
-            replace_task_data_undefined_with_config_field(data, project)
+            # Fast list mode skips undefined replacement to reduce per-task serialization overhead.
+            if not self.context.get('dm_fast'):
+                data = instance.data
+                replace_task_data_undefined_with_config_field(data, project)
 
         return super().to_representation(instance)
 
