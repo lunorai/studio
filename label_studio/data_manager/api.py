@@ -13,6 +13,7 @@ from data_manager.functions import (
     filters_ordering_selected_items_exist,
     get_prepare_params,
     get_prepared_queryset,
+    is_dm_queue_active,
 )
 from data_manager.managers import get_fields_for_evaluation
 from data_manager.models import View
@@ -427,17 +428,17 @@ class TaskListAPI(generics.ListCreateAPIView):
             self.check_object_permissions(request, project)
         else:
             return Response({'detail': 'Neither project nor view id specified'}, status=404)
-        if dm_fast:
-            # Fast mode intentionally skips view/filter/order preprocessing to keep task fetch simple and fast.
+        if is_dm_queue_active(request) or not dm_fast:
+            # Apply view/filters/ordering when a DM tab or queue payload is present.
+            prepare_params = get_prepare_params(request, project)
+            queryset = self.get_task_queryset(request, prepare_params, project)
+        else:
+            # Fast mode without filters: simple project queryset.
             queryset = Task.objects.filter(project=project).order_by('id')
             assignment = get_or_create_user_assignment(request.user, project)
             if assignment is not None:
                 queryset = queryset.filter(id__in=assignment.tasks.values_list('id', flat=True))
             prepare_params = None
-        else:
-            # get prepare params (from view or from payload directly)
-            prepare_params = get_prepare_params(request, project)
-            queryset = self.get_task_queryset(request, prepare_params, project)
 
         if dm_fast:
             page_number = max(1, int_from_request(request.GET, 'page', 1) or 1)
