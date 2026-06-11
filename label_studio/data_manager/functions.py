@@ -392,6 +392,23 @@ def filters_ordering_selected_items_exist(data):
     return bool(selected_items)
 
 
+def is_dm_queue_active(request):
+    """Return True when Data Manager view/filters/ordering/selection should be applied."""
+    view_pk = int_from_request(request.GET, 'view', 0) or int_from_request(request.data, 'view', 0)
+    if view_pk > 0:
+        return True
+
+    if 'query' in request.GET:
+        try:
+            data = json.loads(unquote(request.GET['query']))
+        except Exception:
+            return False
+    else:
+        data = request.data
+
+    return filters_ordering_selected_items_exist(data)
+
+
 def custom_filter_expressions(*args, **kwargs):
     pass
 
