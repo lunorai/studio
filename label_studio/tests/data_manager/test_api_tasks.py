@@ -3,6 +3,8 @@
 import json
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from projects.models import Project
 
 from ..utils import make_annotation, make_prediction, make_task, project_id  # noqa
@@ -128,3 +130,46 @@ def test_views_total_counters(tasks_count, annotations_count, predictions_count,
     assert response_data['total'] == tasks_count, response_data
     assert response_data['total_annotations'] == tasks_count * annotations_count, response_data
     assert response_data['total_predictions'] == tasks_count * predictions_count, response_data
+
+
+@pytest.mark.django_db
+def test_views_tasks_api_fast_counts_use_task_counters(business_client, project_id):
+    payload = dict(project=project_id, data={'test': 1})
+    response = business_client.post(
+        '/api/dm/views/',
+        data=json.dumps(payload),
+        content_type='application/json',
+    )
+
+    assert response.status_code == 201, response.content
+    view_id = response.json()['id']
+
+    project = Project.objects.get(pk=project_id)
+    task_ids = [make_task({'data': {'text': f'task-{i}'}}, project).id for i in range(2)]
+
+    make_annotation({'result': []}, task_ids[0])
+    make_annotation({'result': [], 'was_cancelled': True}, task_ids[0])
+    make_annotation({'result': []}, task_ids[1])
+
+    make_prediction({'result': []}, task_ids[0])
+    make_prediction({'result': []}, task_ids[1])
+    make_prediction({'result': []}, task_ids[1])
+
+    url = (
+        f'/api/tasks?fields=all&view={view_id}'
+        '&include_annotation_counts=1'
+        '&include_prediction_counts=1'
+        '&include_user_annotation_counts=0'
+    )
+
+    with CaptureQueriesContext(connection) as queries:
+        response = business_client.get(url)
+
+    assert response.status_code == 200, response.content
+    response_data = response.json()
+    assert response_data['total_annotations'] == 2
+    assert response_data['total_predictions'] == 3
+
+    count_queries = [query['sql'].lower() for query in queries.captured_queries if 'count(' in query['sql'].lower()]
+    assert not any('task_annotation' in query for query in count_queries), count_queries
+    assert not any('task_prediction' in query for query in count_queries), count_queries

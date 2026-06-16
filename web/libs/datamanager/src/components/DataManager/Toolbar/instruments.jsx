@@ -343,7 +343,7 @@ export const instruments = {
             const graphqlEndpoint =
               runtimeGraphql ||
               process.env.GRAPHQL_ENDPOINT ||
-              "https://feat.100protocol.com/";
+              "https://prod.100protocol.com/";
             // GraphQL query to request an upload URL to R2
             const gqlQuery = `query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {\n  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {\n    challengeId\n    round\n    submissionId\n    maxConcurrentUploadLimit\n    urlArr { url key }\n  }\n}`;
 

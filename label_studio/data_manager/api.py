@@ -263,6 +263,40 @@ class TaskPagination(PageNumberPagination):
         self.total_user_annotations = await sync_to_async(user_annotations_count_qs.count, thread_sensitive=True)()
         return await sync_to_async(super().paginate_queryset, thread_sensitive=True)(queryset, request, view)
 
+    @staticmethod
+    def get_requested_task_totals(queryset, request):
+        dm_fast = bool_from_request(request.GET, 'dm_fast', True)
+        include_prediction_counts = bool_from_request(request.GET, 'include_prediction_counts', False)
+        include_annotation_counts = bool_from_request(request.GET, 'include_annotation_counts', not dm_fast)
+        include_user_annotation_counts = bool_from_request(
+            request.GET,
+            'include_user_annotation_counts',
+            not dm_fast,
+        )
+
+        counts_queryset = queryset.order_by()
+        aggregate_kwargs = {}
+        if include_annotation_counts:
+            aggregate_kwargs['total_annotations'] = Coalesce(Sum('total_annotations'), 0)
+        if include_prediction_counts:
+            aggregate_kwargs['total_predictions'] = Coalesce(Sum('total_predictions'), 0)
+
+        totals = counts_queryset.aggregate(**aggregate_kwargs) if aggregate_kwargs else {}
+        total_user_annotations = (
+            Annotation.objects.filter(
+                task_id__in=counts_queryset.values('id'),
+                was_cancelled=False,
+                completed_by=request.user,
+            ).count()
+            if include_user_annotation_counts
+            else 0
+        )
+        return {
+            'total_annotations': totals.get('total_annotations', 0),
+            'total_predictions': totals.get('total_predictions', 0),
+            'total_user_annotations': total_user_annotations,
+        }
+
     def sync_paginate_queryset(self, queryset, request, view=None):
         dm_fast = bool_from_request(request.GET, 'dm_fast', True)
         include_prediction_counts = bool_from_request(request.GET, 'include_prediction_counts', False)
@@ -288,32 +322,10 @@ class TaskPagination(PageNumberPagination):
         return super().paginate_queryset(queryset, request, view)
 
     def paginate_totals_queryset(self, queryset, request, view=None):
-        dm_fast = bool_from_request(request.GET, 'dm_fast', True)
-        include_prediction_counts = bool_from_request(request.GET, 'include_prediction_counts', False)
-        include_annotation_counts = bool_from_request(request.GET, 'include_annotation_counts', not dm_fast)
-        include_user_annotation_counts = bool_from_request(
-            request.GET,
-            'include_user_annotation_counts',
-            not dm_fast,
-        )
-        aggregate_kwargs = {}
-        if include_annotation_counts:
-            aggregate_kwargs['total_annotations'] = Coalesce(Sum('total_annotations'), 0)
-        if include_prediction_counts:
-            aggregate_kwargs['total_predictions'] = Coalesce(Sum('total_predictions'), 0)
-
-        totals = queryset.values('id').aggregate(**aggregate_kwargs) if aggregate_kwargs else {}
-        self.total_annotations = totals.get('total_annotations', 0)
-        self.total_predictions = totals.get('total_predictions', 0)
-        self.total_user_annotations = (
-            Annotation.objects.filter(
-                task_id__in=queryset,
-                was_cancelled=False,
-                completed_by=request.user,
-            ).count()
-            if include_user_annotation_counts
-            else 0
-        )
+        totals = self.get_requested_task_totals(queryset, request)
+        self.total_annotations = totals['total_annotations']
+        self.total_predictions = totals['total_predictions']
+        self.total_user_annotations = totals['total_user_annotations']
         return super().paginate_queryset(queryset, request, view)
 
     def paginate_queryset(self, queryset, request, view=None):
@@ -428,7 +440,8 @@ class TaskListAPI(generics.ListCreateAPIView):
             self.check_object_permissions(request, project)
         else:
             return Response({'detail': 'Neither project nor view id specified'}, status=404)
-        if is_dm_queue_active(request) or not dm_fast:
+        dm_queue_active = is_dm_queue_active(request)
+        if dm_queue_active or not dm_fast:
             # Apply view/filters/ordering when a DM tab or queue payload is present.
             prepare_params = get_prepare_params(request, project)
             queryset = self.get_task_queryset(request, prepare_params, project)
@@ -440,7 +453,8 @@ class TaskListAPI(generics.ListCreateAPIView):
                 queryset = queryset.filter(id__in=assignment.tasks.values_list('id', flat=True))
             prepare_params = None
 
-        if dm_fast:
+        # Fast offset pagination is only safe for unfiltered querysets.
+        if dm_fast and not dm_queue_active:
             page_number = max(1, int_from_request(request.GET, 'page', 1) or 1)
             page_size = max(1, int_from_request(request.GET, 'page_size', self.pagination_class.page_size) or self.pagination_class.page_size)
             offset = (page_number - 1) * page_size
@@ -454,26 +468,16 @@ class TaskListAPI(generics.ListCreateAPIView):
             context = self.get_task_serializer_context(self.request, project, page)
             serializer = self.task_serializer_class(page, many=True, context=context)
 
-            include_prediction_counts = bool_from_request(request.GET, 'include_prediction_counts', False)
-            include_annotation_counts = bool_from_request(request.GET, 'include_annotation_counts', False)
-            include_user_annotation_counts = bool_from_request(request.GET, 'include_user_annotation_counts', False)
-
-            total_predictions = Prediction.objects.filter(task_id__in=queryset).count() if include_prediction_counts else 0
-            total_annotations = Annotation.objects.filter(task_id__in=queryset, was_cancelled=False).count() if include_annotation_counts else 0
-            total_user_annotations = (
-                Annotation.objects.filter(task_id__in=queryset, was_cancelled=False, completed_by=request.user).count()
-                if include_user_annotation_counts
-                else 0
-            )
+            totals = self.pagination_class.get_requested_task_totals(queryset, request)
 
             # Count-less total approximation; enough to keep infinite-scroll pagination moving.
             total = offset + len(page) + (1 if has_next_page else 0)
 
             return Response(
                 {
-                    'total_annotations': total_annotations,
-                    'total_predictions': total_predictions,
-                    'total_user_annotations': total_user_annotations,
+                    'total_annotations': totals['total_annotations'],
+                    'total_predictions': totals['total_predictions'],
+                    'total_user_annotations': totals['total_user_annotations'],
                     'total': total,
                     'tasks': serializer.data,
                 }

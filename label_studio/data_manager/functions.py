@@ -277,54 +277,66 @@ def get_all_columns(project, *_):
     return result
 
 
+def _prepare_params_from_payload(request, project, data):
+    selected = data.get('selectedItems', {'all': True, 'excluded': []})
+    if not isinstance(selected, dict):
+        if isinstance(selected, str):
+            try:
+                selected = json.loads(selected)
+            except Exception as e:
+                logger.error(f'Error parsing selectedItems: {e}')
+                raise DataManagerException(
+                    'selectedItems must be JSON encoded string for dict: {"all": [true|false], '
+                    '"excluded | included": [...task_ids...]}. '
+                    f'Found: {selected}'
+                )
+        else:
+            raise DataManagerException(
+                'selectedItems must be dict: {"all": [true|false], '
+                '"excluded | included": [...task_ids...]}. '
+                f'Found type: {type(selected)} with value: {selected}'
+            )
+    filters = data.get('filters', None)
+    ordering = data.get('ordering', [])
+    return PrepareParams(
+        project=project.id, selectedItems=selected, data=data, filters=filters, ordering=ordering, request=request
+    )
+
+
 def get_prepare_params(request, project):
     """This function extract prepare_params from
+    * live query payload when filters/ordering/selection are present
     * view_id if it's inside of request data
     * selectedItems, filters, ordering if they are in request and there is no view id
     """
-    # use filters and selected items from view
     view_id = int_from_request(request.GET, 'view', 0) or int_from_request(request.data, 'view', 0)
+
+    query_data = None
+    if 'query' in request.GET:
+        try:
+            query_data = json.loads(unquote(request.GET['query']))
+        except Exception as e:
+            logger.error(f'Error parsing query param: {e}')
+
+    if query_data and filters_ordering_selected_items_exist(query_data):
+        if view_id > 0:
+            view = get_object_or_404(View, pk=view_id)
+            if view.project.pk != project.pk:
+                raise DataManagerException('Project and View mismatch')
+        return _prepare_params_from_payload(request, project, query_data)
+
     if view_id > 0:
         view = get_object_or_404(View, pk=view_id)
         if view.project.pk != project.pk:
             raise DataManagerException('Project and View mismatch')
         prepare_params = view.get_prepare_tasks_params(add_selected_items=True)
         prepare_params.request = request
+        return prepare_params
 
-    # use filters and selected items from request if it's specified
-    else:
-        # query arguments from url
-        if 'query' in request.GET:
-            data = json.loads(unquote(request.GET['query']))
-        # data payload from body
-        else:
-            data = request.data
+    if query_data is not None:
+        return _prepare_params_from_payload(request, project, query_data)
 
-        selected = data.get('selectedItems', {'all': True, 'excluded': []})
-        if not isinstance(selected, dict):
-            if isinstance(selected, str):
-                # try to parse JSON string
-                try:
-                    selected = json.loads(selected)
-                except Exception as e:
-                    logger.error(f'Error parsing selectedItems: {e}')
-                    raise DataManagerException(
-                        'selectedItems must be JSON encoded string for dict: {"all": [true|false], '
-                        '"excluded | included": [...task_ids...]}. '
-                        f'Found: {selected}'
-                    )
-            else:
-                raise DataManagerException(
-                    'selectedItems must be dict: {"all": [true|false], '
-                    '"excluded | included": [...task_ids...]}. '
-                    f'Found type: {type(selected)} with value: {selected}'
-                )
-        filters = data.get('filters', None)
-        ordering = data.get('ordering', [])
-        prepare_params = PrepareParams(
-            project=project.id, selectedItems=selected, data=data, filters=filters, ordering=ordering, request=request
-        )
-    return prepare_params
+    return _prepare_params_from_payload(request, project, request.data)
 
 
 def get_prepared_queryset(request, project):
@@ -393,20 +405,32 @@ def filters_ordering_selected_items_exist(data):
 
 
 def is_dm_queue_active(request):
-    """Return True when Data Manager view/filters/ordering/selection should be applied."""
-    view_pk = int_from_request(request.GET, 'view', 0) or int_from_request(request.data, 'view', 0)
-    if view_pk > 0:
-        return True
-
+    """Return True when Data Manager filters, ordering, or selection should be applied."""
     if 'query' in request.GET:
         try:
             data = json.loads(unquote(request.GET['query']))
         except Exception:
             return False
-    else:
-        data = request.data
+        return filters_ordering_selected_items_exist(data)
 
-    return filters_ordering_selected_items_exist(data)
+    if filters_ordering_selected_items_exist(request.data):
+        return True
+
+    view_pk = int_from_request(request.GET, 'view', 0) or int_from_request(request.data, 'view', 0)
+    if view_pk > 0:
+        view = View.objects.filter(pk=view_pk).first()
+        if view is None:
+            return False
+        prepare_params = view.get_prepare_tasks_params(add_selected_items=True)
+        return filters_ordering_selected_items_exist(
+            {
+                'filters': prepare_params.filters,
+                'ordering': prepare_params.ordering,
+                'selectedItems': prepare_params.selectedItems,
+            }
+        )
+
+    return False
 
 
 def custom_filter_expressions(*args, **kwargs):
