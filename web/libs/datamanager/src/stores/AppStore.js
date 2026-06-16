@@ -232,12 +232,6 @@ export const AppStore = types
 
       self.setLoadingData(true);
 
-      if (self.mode === "labelstream") {
-        yield self.taskStore.loadNextTask({
-          select: !!taskID && !!annotationID,
-        });
-      }
-
       if (annotationID !== undefined) {
         self.annotationStore.setSelected(annotationID);
       } else {

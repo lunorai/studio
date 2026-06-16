@@ -431,25 +431,14 @@ class TaskListAPI(generics.ListCreateAPIView):
     def get_page_level_totals(request, project, page_ids, page):
         include_prediction_counts = bool_from_request(request.GET, 'include_prediction_counts', False)
         include_annotation_counts = bool_from_request(request.GET, 'include_annotation_counts', False)
-        include_user_annotation_counts = bool_from_request(request.GET, 'include_user_annotation_counts', False)
 
         total_annotations = sum(getattr(task, 'total_annotations', 0) or 0 for task in page) if include_annotation_counts else 0
         total_predictions = sum(getattr(task, 'total_predictions', 0) or 0 for task in page) if include_prediction_counts else 0
-        total_user_annotations = (
-            Annotation.objects.filter(
-                project_id=project.id,
-                task_id__in=page_ids,
-                was_cancelled=False,
-                completed_by=request.user,
-            ).count()
-            if include_user_annotation_counts and page_ids
-            else 0
-        )
 
         return {
             'total_annotations': total_annotations,
             'total_predictions': total_predictions,
-            'total_user_annotations': total_user_annotations,
+            'total_user_annotations': 0,
         }
 
     def get_fast_page_response(self, request, project, queryset, dm_queue_active=False):
@@ -472,8 +461,15 @@ class TaskListAPI(generics.ListCreateAPIView):
 
         context = self.get_task_serializer_context(self.request, project, page)
         serializer = self.task_serializer_class(page, many=True, context=context)
-        if dm_queue_active:
+        use_optimized_filtered_summary_counts = dm_queue_active and bool_from_request(
+            request.GET, 'optimize_summary_counts', False
+        )
+        if use_optimized_filtered_summary_counts:
             totals = self.get_page_level_totals(request, project, page_ids, page)
+            if bool_from_request(request.GET, 'include_user_annotation_counts', False):
+                totals['total_user_annotations'] = self.pagination_class.get_requested_task_totals(
+                    queryset, request, project=project
+                )['total_user_annotations']
         else:
             totals = self.pagination_class.get_requested_task_totals(queryset, request, project=project)
 

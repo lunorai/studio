@@ -778,7 +778,7 @@ class LunorSubmissionAssetsUploadAPI(APIView):
         graphql_endpoint = (
             runtime_graphql
             or os.environ.get("GRAPHQL_ENDPOINT")
-            or "https://feat.100protocol.com/"
+            or "https://prod.100protocol.com/"
         )
 
         # 1) Get signed upload URL
