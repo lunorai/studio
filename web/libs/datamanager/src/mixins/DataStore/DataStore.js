@@ -259,48 +259,54 @@ export const DataStore = (modelName, { listItemType, apiMethod, properties, asso
 
         if (currentViewQuery) {
           params.query = currentViewQuery;
-        } else {
+        }
+        if (currentViewId) {
           params.view = currentViewId;
         }
 
         if (interaction) Object.assign(params, { interaction });
 
-        const data = yield root.apiCall(apiMethod, params, {}, { allowToCancel: root.SDK.type === "DE" });
+        try {
+          const data = yield root.apiCall(apiMethod, params, {}, { allowToCancel: root.SDK.type === "DE" });
 
-        // We cancel current request processing if request id
-        // changed during the request. It indicates that something
-        // triggered another request while current one is not yet finished
-        if (requestId !== self.requestId || data.isCanceled) {
-          console.log(`Request ${requestId} was cancelled by another request`);
-          return;
+          // We cancel current request processing if request id
+          // changed during the request. It indicates that something
+          // triggered another request while current one is not yet finished
+          if (requestId !== self.requestId || data.isCanceled) {
+            console.log(`Request ${requestId} was cancelled by another request`);
+            return;
+          }
+
+          const highlightedID = self.highlighted;
+          const apiMethodSettings = root.API.getSettingsByMethodName(apiMethod);
+          const { total, [apiMethod]: list } = data;
+          let associatedList = [];
+
+          if (isFF(FF_LOPS_E_3) && apiMethodSettings?.associatedType) {
+            associatedList = data[apiMethodSettings?.associatedType];
+          }
+
+          if (list) {
+            self.setList({
+              total,
+              list,
+              reload: reload || isDefined(pageNumber),
+              associatedList,
+            });
+          }
+
+          if (isDefined(highlightedID) && !listIncludes(self.list, highlightedID)) {
+            self.highlighted = null;
+          }
+
+          self.postProcessData?.(data);
+
+          root.SDK.invoke("dataFetched", self);
+        } finally {
+          if (requestId === self.requestId) {
+            self.loading = false;
+          }
         }
-
-        const highlightedID = self.highlighted;
-        const apiMethodSettings = root.API.getSettingsByMethodName(apiMethod);
-        const { total, [apiMethod]: list } = data;
-        let associatedList = [];
-
-        if (isFF(FF_LOPS_E_3) && apiMethodSettings?.associatedType) {
-          associatedList = data[apiMethodSettings?.associatedType];
-        }
-
-        if (list)
-          self.setList({
-            total,
-            list,
-            reload: reload || isDefined(pageNumber),
-            associatedList,
-          });
-
-        if (isDefined(highlightedID) && !listIncludes(self.list, highlightedID)) {
-          self.highlighted = null;
-        }
-
-        self.postProcessData?.(data);
-
-        self.loading = false;
-
-        root.SDK.invoke("dataFetched", self);
       }),
 
       // Public fetch function that uses debouncing

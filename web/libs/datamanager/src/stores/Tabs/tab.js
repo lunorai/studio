@@ -431,8 +431,10 @@ export const Tab = types
     },
 
     reload: flow(function* ({ interaction } = {}) {
+      const liveQuery = interaction === "filter" || interaction === "ordering" ? self.query : undefined;
+
       if (self.saved) {
-        yield self.dataStore.reload({ id: self.id, interaction });
+        yield self.dataStore.reload({ id: self.id, query: liveQuery, interaction });
       }
       if (self.virtual) {
         yield self.dataStore.reload({ query: self.query, interaction });
