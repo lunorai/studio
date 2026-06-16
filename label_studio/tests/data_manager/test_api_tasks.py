@@ -214,6 +214,7 @@ def test_views_tasks_api_fast_mode_keeps_view_filters(business_client, project_i
         f'&include_annotation_counts=true'
         f'&include_user_annotation_counts=true'
         f'&include_prediction_counts=true'
+        f'&optimize_summary_counts=true'
         f'&view={view_id}&project={project_id}'
     )
 
@@ -224,3 +225,53 @@ def test_views_tasks_api_fast_mode_keeps_view_filters(business_client, project_i
     assert response_data['total_predictions'] == 1, response_data
     assert response_data['total_user_annotations'] == 0, response_data
     assert [task['id'] for task in response_data['tasks']] == [matching_task.id], response_data
+
+
+@pytest.mark.django_db
+def test_views_tasks_api_fast_mode_keeps_exact_total_user_annotations(business_client, project_id):
+    payload = {
+        'project': project_id,
+        'data': {
+            'filters': {
+                'conjunction': 'and',
+                'items': [
+                    {
+                        'filter': 'filter:tasks:data.text',
+                        'operator': 'contains',
+                        'type': 'String',
+                        'value': 'mine',
+                    }
+                ],
+            }
+        },
+    }
+    response = business_client.post(
+        '/api/dm/views/',
+        data=json.dumps(payload),
+        content_type='application/json',
+    )
+
+    assert response.status_code == 201, response.content
+    view_id = response.json()['id']
+
+    project = Project.objects.get(pk=project_id)
+    first_task = make_task({'data': {'text': 'mine one'}}, project)
+    second_task = make_task({'data': {'text': 'mine two'}}, project)
+    make_task({'data': {'text': 'not mine'}}, project)
+
+    make_annotation({'result': [], 'completed_by': business_client.user}, first_task.id)
+    make_annotation({'result': [], 'completed_by': business_client.user}, second_task.id)
+
+    response = business_client.get(
+        f'/api/tasks?page=1&page_size=1'
+        f'&include_annotation_counts=true'
+        f'&include_user_annotation_counts=true'
+        f'&include_prediction_counts=true'
+        f'&optimize_summary_counts=true'
+        f'&view={view_id}&project={project_id}'
+    )
+
+    assert response.status_code == 200, response.content
+    response_data = response.json()
+    assert response_data['total_user_annotations'] == 2, response_data
+    assert len(response_data['tasks']) == 1, response_data

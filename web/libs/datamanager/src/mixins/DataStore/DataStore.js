@@ -255,6 +255,7 @@ export const DataStore = (modelName, { listItemType, apiMethod, properties, asso
           params.include_annotation_counts = true;
           params.include_user_annotation_counts = true;
           params.include_prediction_counts = true;
+          params.optimize_summary_counts = true;
         }
 
         if (currentViewQuery) {
