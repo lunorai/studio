@@ -22,6 +22,7 @@ def next_task(project, queryset, **kwargs):
 
     request = kwargs['request']
     dm_queue = filters_ordering_selected_items_exist(request.data)
+    label_stream_mode = request.data.get('label_stream_mode')
     assignment = get_or_create_user_assignment(request.user, project)
     assigned_flag = assignment is not None
     if assignment is not None:
@@ -33,6 +34,7 @@ def next_task(project, queryset, **kwargs):
         project,
         dm_queue,
         assigned_flag=assigned_flag,
+        label_stream_mode=label_stream_mode,
     )
 
     if next_task is None:

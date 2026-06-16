@@ -153,11 +153,17 @@ def _try_uncertainty_sampling(
 
 
 def get_not_solved_tasks_qs(
-    user: User, project: Project, prepared_tasks: QuerySet[Task], assigned_flag: Union[bool, None], queue_info: str
+    user: User,
+    project: Project,
+    prepared_tasks: QuerySet[Task],
+    assigned_flag: Union[bool, None],
+    queue_info: str,
+    label_stream_mode: Union[str, None] = None,
 ) -> Tuple[QuerySet[Task], List[int], str, bool]:
     user_solved_tasks_array = user.annotations.filter(project=project, task__isnull=False)
     user_solved_tasks_array = user_solved_tasks_array.distinct().values_list('task__pk', flat=True)
     not_solved_tasks = prepared_tasks.exclude(pk__in=user_solved_tasks_array)
+    resume_from_user_progress = label_stream_mode == 'all'
 
     # annotation can't have postponed draft, so skip annotation__project filter
     postponed_drafts = user.drafts.filter(task__project=project, was_postponed=True)
@@ -202,7 +208,7 @@ def get_not_solved_tasks_qs(
         # otherwise, filtering out completed tasks is sufficient
         else:
             # ignore tasks that are already labeled for onboarding mode
-            if not project.show_ground_truth_first:
+            if not project.show_ground_truth_first and not resume_from_user_progress:
                 not_solved_tasks = not_solved_tasks.filter(is_labeled=False)
 
     if not flag_set('fflag_fix_back_lsdv_4523_show_overlap_first_order_27022023_short'):
@@ -279,9 +285,11 @@ def get_next_task_without_dm_queue(
     return next_task, use_task_lock, queue_info
 
 
-def skipped_queue(next_task, prepared_tasks, project, user, assigned_flag, queue_info):
+def skipped_queue(next_task, prepared_tasks, project, user, assigned_flag, queue_info, allow_completed_tasks=False):
     if not next_task and project.skip_queue == project.SkipQueue.REQUEUE_FOR_ME:
-        q = Q(project=project, task__isnull=False, was_cancelled=True, task__is_labeled=False)
+        q = Q(project=project, task__isnull=False, was_cancelled=True)
+        if not allow_completed_tasks:
+            q &= Q(task__is_labeled=False)
         skipped_tasks = user.annotations.filter(q).order_by('updated_at').values_list('task__pk', flat=True)
         if skipped_tasks.exists():
             preserved_order = Case(*[When(pk=pk, then=pos) for pos, pk in enumerate(skipped_tasks)])
@@ -300,9 +308,11 @@ def skipped_queue(next_task, prepared_tasks, project, user, assigned_flag, queue
     return next_task, queue_info
 
 
-def postponed_queue(next_task, prepared_tasks, project, user, assigned_flag, queue_info):
+def postponed_queue(next_task, prepared_tasks, project, user, assigned_flag, queue_info, allow_completed_tasks=False):
     if not next_task:
-        q = Q(task__project=project, task__isnull=False, was_postponed=True, task__is_labeled=False)
+        q = Q(task__project=project, task__isnull=False, was_postponed=True)
+        if not allow_completed_tasks:
+            q &= Q(task__is_labeled=False)
         postponed_tasks = user.drafts.filter(q).order_by('updated_at').values_list('task__pk', flat=True)
         if postponed_tasks.exists():
             preserved_order = Case(*[When(pk=pk, then=pos) for pos, pk in enumerate(postponed_tasks)])
@@ -359,6 +369,7 @@ def get_next_task(
     project: Project,
     dm_queue: Union[bool, None],
     assigned_flag: Union[bool, None] = None,
+    label_stream_mode: Union[str, None] = None,
 ) -> Tuple[Union[Task, None], str]:
     logger.debug(f'get_next_task called. user: {user}, project: {project}, dm_queue: {dm_queue}')
 
@@ -366,9 +377,10 @@ def get_next_task(
         next_task = None
         use_task_lock = True
         queue_info = ''
+        allow_completed_tasks = label_stream_mode == 'all'
 
         not_solved_tasks, user_solved_tasks_array, queue_info, prioritized_low_agreement = get_not_solved_tasks_qs(
-            user, project, prepared_tasks, assigned_flag, queue_info
+            user, project, prepared_tasks, assigned_flag, queue_info, label_stream_mode=label_stream_mode
         )
 
         if not dm_queue:
@@ -398,9 +410,25 @@ def get_next_task(
                     not_solved_tasks, user_solved_tasks_array, prepared_tasks, user, project, queue_info
                 )
 
-        next_task, queue_info = postponed_queue(next_task, prepared_tasks, project, user, assigned_flag, queue_info)
+        next_task, queue_info = postponed_queue(
+            next_task,
+            prepared_tasks,
+            project,
+            user,
+            assigned_flag,
+            queue_info,
+            allow_completed_tasks=allow_completed_tasks,
+        )
 
-        next_task, queue_info = skipped_queue(next_task, prepared_tasks, project, user, assigned_flag, queue_info)
+        next_task, queue_info = skipped_queue(
+            next_task,
+            prepared_tasks,
+            project,
+            user,
+            assigned_flag,
+            queue_info,
+            allow_completed_tasks=allow_completed_tasks,
+        )
 
         if next_task and use_task_lock:
             # set lock for the task with TTL 3x time more then current average lead time (or 1 hour by default)

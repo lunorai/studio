@@ -935,6 +935,7 @@ class ProjectNextTaskAPI(generics.RetrieveAPIView):
             project,
             dm_queue,
             assigned_flag=assigned_flag,
+            label_stream_mode=request.data.get('label_stream_mode'),
         )
 
         if next_task is None:

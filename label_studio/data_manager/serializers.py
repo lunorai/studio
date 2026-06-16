@@ -21,6 +21,20 @@ from users.models import User
 from label_studio.core.utils.common import round_floats
 
 
+def serialize_dm_user(user: User):
+    return {
+        'user_id': user.id,
+        'first_name': user.first_name or '',
+        'last_name': user.last_name or '',
+        'username': user.username or '',
+        'email': user.email or '',
+        'last_activity': (user.last_activity.isoformat() if getattr(user, 'last_activity', None) else ''),
+        'avatar': (user.avatar.url if getattr(user, 'avatar', None) else None),
+        'initials': user.get_initials(False),
+        'lunor_userId': user.lunor_userId or '',
+    }
+
+
 class ChildFilterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Filter
@@ -341,17 +355,7 @@ class AnnotationsDMFieldSerializer(AnnotationSerializer):
 
     @staticmethod
     def _serialize_user(u: User):
-        return {
-            'user_id': u.id,
-            'first_name': u.first_name or '',
-            'last_name': u.last_name or '',
-            'username': u.username or '',
-            'email': u.email or '',
-            'last_activity': (u.last_activity.isoformat() if getattr(u, 'last_activity', None) else ''),
-            'avatar': (u.avatar.url if getattr(u, 'avatar', None) else None),
-            'initials': u.get_initials(False),
-            'lunor_userId': u.lunor_userId or '',
-        }
+        return serialize_dm_user(u)
 
     def get_completed_by(self, obj):
         user = getattr(obj, 'completed_by', None)
@@ -585,7 +589,15 @@ class DataManagerTaskSerializer(TaskSerializer):
 
     @staticmethod
     def get_updated_by(obj):
-        return [{'user_id': obj.updated_by_id}] if obj.updated_by_id else []
+        if not obj.updated_by_id:
+            return []
+
+        updated_by = getattr(obj, 'updated_by', None)
+        if isinstance(updated_by, User):
+            return [serialize_dm_user(updated_by)]
+
+        user = User.objects.filter(pk=obj.updated_by_id).first()
+        return [serialize_dm_user(user)] if user is not None else [{'user_id': obj.updated_by_id}]
 
     @staticmethod
     def get_annotators(obj):
@@ -603,21 +615,8 @@ class DataManagerTaskSerializer(TaskSerializer):
         # Fetch user details for richer frontend rendering (avoids unresolved MST references)
         users_by_id = {u.id: u for u in User.objects.filter(id__in=annotator_ids)}
 
-        def serialize_user(u):
-            return {
-                'user_id': u.id,
-                'first_name': u.first_name or '',
-                'last_name': u.last_name or '',
-                'username': u.username or '',
-                'email': u.email or '',
-                'last_activity': (u.last_activity.isoformat() if getattr(u, 'last_activity', None) else ''),
-                'avatar': (u.avatar.url if getattr(u, 'avatar', None) else None),
-                'initials': u.get_initials(False),
-                'lunor_userId': u.lunor_userId or '',
-            }
-
         # Return full objects when available; fall back to ids to maintain compatibility
-        result = [serialize_user(users_by_id[uid]) if uid in users_by_id else uid for uid in annotator_ids]
+        result = [serialize_dm_user(users_by_id[uid]) if uid in users_by_id else uid for uid in annotator_ids]
         return result
 
     def get_annotations_ids(self, task):

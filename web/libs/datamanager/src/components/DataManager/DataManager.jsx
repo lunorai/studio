@@ -23,13 +23,18 @@ const injector = inject(({ store }) => {
 
 const summaryInjector = inject(({ store }) => {
   const { project, taskStore } = store;
+  const isLabelStream = store.SDK?.mode === "labelstream";
 
   return {
+    isLabelStream,
     totalTasks: project?.task_count ?? project?.task_number ?? 0,
     totalFoundTasks: taskStore?.total ?? 0,
     totalAnnotations: taskStore?.totalAnnotations ?? 0,
     totalUserAnnotations: taskStore?.totalUserAnnotations ?? 0,
     totalPredictions: taskStore?.totalPredictions ?? 0,
+    queueTotal: project?.queue_total ?? 0,
+    queueDone: project?.queue_done ?? 0,
+    myAnnotationCount: project?.my_annotation_count ?? 0,
     cloudSync: project.target_syncing ?? project.source_syncing ?? false,
   };
 });
@@ -44,6 +49,10 @@ const switchInjector = inject(({ store }) => {
 });
 
 const ProjectSummary = summaryInjector((props) => {
+  const tasksPrimary = props.isLabelStream ? props.queueDone : props.totalFoundTasks;
+  const tasksSecondary = props.isLabelStream ? props.queueTotal : props.totalTasks;
+  const submittedAnnotations = props.isLabelStream ? props.myAnnotationCount : props.totalAnnotations;
+
   return (
     <Space
       size="large"
@@ -64,11 +73,13 @@ const ProjectSummary = summaryInjector((props) => {
       <span style={{ display: "flex", alignItems: "center", fontSize: 12 }}>
         <Space size="compact">
           <span>
-            Tasks: <span title="Filtered tasks">{props.totalFoundTasks}</span> /{" "}
-            <span title="Total tasks in the project">{props.totalTasks}</span>
+            Tasks: <span title={props.isLabelStream ? "Tasks completed by you" : "Filtered tasks"}>{tasksPrimary}</span> /{" "}
+            <span title={props.isLabelStream ? "Total tasks available to you" : "Total tasks in the project"}>
+              {tasksSecondary}
+            </span>
           </span>
-          <span>Submitted annotations: {props.totalAnnotations}</span>
-          <span>My submitted annotations: {props.totalUserAnnotations}</span>
+          <span>Submitted annotations: {submittedAnnotations}</span>
+          {!props.isLabelStream && <span>My submitted annotations: {props.totalUserAnnotations}</span>}
           <span>Predictions: {props.totalPredictions}</span>
         </Space>
       </span>
