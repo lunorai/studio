@@ -339,6 +339,27 @@ def test_next_task_all_mode_resumes_from_current_users_progress(project_id):
 
 
 @pytest.mark.django_db
+def test_next_task_all_mode_skips_tasks_locked_by_other_users(project_id):
+    project = Project.objects.get(pk=project_id)
+    first_task = make_task({'data': {'text': 'locked by another user'}}, project)
+    second_task = make_task({'data': {'text': 'available for me'}}, project)
+
+    ann1 = make_annotator({'email': 'resume-lock-ann1@example.com'}, project, login=True)
+    ann2 = make_annotator({'email': 'resume-lock-ann2@example.com'}, project, login=True)
+
+    first_task.set_lock(ann1.annotator)
+
+    all_mode_response = ann2.post(
+        '/api/dm/actions/?project={}&id=next_task'.format(project_id),
+        data=json.dumps({'label_stream_mode': 'all'}),
+        content_type='application/json',
+    )
+
+    assert all_mode_response.status_code == 200, all_mode_response.content
+    assert all_mode_response.json()['id'] == second_task.id
+
+
+@pytest.mark.django_db
 def test_project_state_returns_user_queue_stats(business_client, project_id):
     project = Project.objects.get(pk=project_id)
     first_task = make_task({'data': {'text': 'task-1'}}, project)
