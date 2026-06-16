@@ -740,6 +740,7 @@ export const AppStore = types
       if (actionId === "next_task") {
         const isSelectAll = actionParams.selectedItems.all === true;
         const isFilteredLabelStreamMode = labelStreamMode === "filtered";
+        actionParams.label_stream_mode = labelStreamMode;
         if (isAllLabelStreamMode && !isSelectAll) {
           delete actionParams.filters;
 

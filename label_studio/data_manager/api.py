@@ -414,11 +414,10 @@ class TaskListAPI(generics.ListCreateAPIView):
 
     @staticmethod
     def prefetch(queryset):
-        return queryset.prefetch_related(
+        return queryset.select_related('project', 'updated_by').prefetch_related(
             'annotations',
             'predictions',
             'annotations__completed_by',
-            'project',
             'io_storages_azureblobimportstoragelink',
             'io_storages_gcsimportstoragelink',
             'io_storages_localfilesimportstoragelink',
@@ -676,6 +675,25 @@ class ProjectStateAPI(APIView):
         project = generics.get_object_or_404(Project, pk=pk)
         self.check_object_permissions(request, project)
         data = ProjectSerializer(project, context={'request': request}).data
+        assignment = get_or_create_user_assignment(request.user, project)
+        queue_tasks = assignment.tasks.all() if assignment is not None else project.tasks.all()
+        queue_total = queue_tasks.count()
+
+        queue_done_filters = {
+            'project': project,
+            'annotations__completed_by_id': request.user.id,
+        }
+        if assignment is not None:
+            queue_done_filters['id__in'] = assignment.tasks.values_list('id', flat=True)
+        if project.skip_queue == project.SkipQueue.REQUEUE_FOR_ME:
+            queue_done_filters['annotations__was_cancelled'] = False
+
+        queue_done = Task.objects.filter(**queue_done_filters).distinct().count()
+        my_annotation_count = Annotation.objects.filter(
+            project=project,
+            completed_by=request.user,
+            was_cancelled=False,
+        ).count()
 
         data.update(
             {
@@ -686,6 +704,10 @@ class ProjectStateAPI(APIView):
                 'target_syncing': False,
                 'task_count': project.tasks.count(),
                 'annotation_count': Annotation.objects.filter(project=project).count(),
+                'queue_total': queue_total,
+                'queue_done': queue_done,
+                'queue_left': max(queue_total - queue_done, 0),
+                'my_annotation_count': my_annotation_count,
                 'config_has_control_tags': len(project.parsed_label_config or project.get_parsed_config()) > 0,
             }
         )

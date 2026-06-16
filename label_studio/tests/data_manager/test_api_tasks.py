@@ -7,7 +7,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from projects.models import Project
 
-from ..utils import make_annotation, make_prediction, make_task, project_id  # noqa
+from ..utils import make_annotation, make_annotator, make_prediction, make_task, project_id  # noqa
 
 
 @pytest.mark.django_db
@@ -275,3 +275,84 @@ def test_views_tasks_api_fast_mode_keeps_exact_total_user_annotations(business_c
     response_data = response.json()
     assert response_data['total_user_annotations'] == 2, response_data
     assert len(response_data['tasks']) == 1, response_data
+
+
+@pytest.mark.django_db
+def test_views_tasks_api_returns_embedded_updated_by_user(business_client, project_id):
+    payload = dict(project=project_id, data={'test': 1})
+    response = business_client.post(
+        '/api/dm/views/',
+        data=json.dumps(payload),
+        content_type='application/json',
+    )
+
+    assert response.status_code == 201, response.content
+    view_id = response.json()['id']
+
+    project = Project.objects.get(pk=project_id)
+    task = make_task({'data': {'text': 'updated by me'}}, project)
+    make_annotation({'result': [], 'completed_by': business_client.user}, task.id)
+
+    response = business_client.get(f'/api/tasks?fields=all&dm_fast=0&view={view_id}')
+
+    assert response.status_code == 200, response.content
+    response_data = response.json()
+    assert len(response_data['tasks']) == 1, response_data
+
+    updated_by = response_data['tasks'][0]['updated_by']
+
+    assert updated_by == [
+        {
+            'user_id': business_client.user.id,
+            'first_name': business_client.user.first_name or '',
+            'last_name': business_client.user.last_name or '',
+            'username': business_client.user.username or '',
+            'email': business_client.user.email or '',
+            'last_activity': business_client.user.last_activity.isoformat() if business_client.user.last_activity else '',
+            'avatar': business_client.user.avatar.url if business_client.user.avatar else None,
+            'initials': business_client.user.get_initials(False),
+            'lunor_userId': business_client.user.lunor_userId or '',
+        }
+    ]
+
+
+@pytest.mark.django_db
+def test_next_task_all_mode_resumes_from_current_users_progress(project_id):
+    project = Project.objects.get(pk=project_id)
+    task = make_task({'data': {'text': 'resume me'}}, project)
+
+    ann1 = make_annotator({'email': 'resume-ann1@example.com'}, project, login=True)
+    ann2 = make_annotator({'email': 'resume-ann2@example.com'}, project, login=True)
+
+    make_annotation({'result': [], 'completed_by': ann1.annotator}, task.id)
+
+    default_response = ann2.post('/api/dm/actions/?project={}&id=next_task'.format(project_id), content_type='application/json')
+    assert default_response.status_code == 404, default_response.content
+
+    all_mode_response = ann2.post(
+        '/api/dm/actions/?project={}&id=next_task'.format(project_id),
+        data=json.dumps({'label_stream_mode': 'all'}),
+        content_type='application/json',
+    )
+    assert all_mode_response.status_code == 200, all_mode_response.content
+    assert all_mode_response.json()['id'] == task.id
+
+
+@pytest.mark.django_db
+def test_project_state_returns_user_queue_stats(business_client, project_id):
+    project = Project.objects.get(pk=project_id)
+    first_task = make_task({'data': {'text': 'task-1'}}, project)
+    second_task = make_task({'data': {'text': 'task-2'}}, project)
+
+    make_annotation({'result': [], 'completed_by': business_client.user}, first_task.id)
+    make_annotation({'result': [], 'completed_by': business_client.user}, second_task.id)
+
+    response = business_client.get(f'/api/dm/project/?project={project_id}')
+
+    assert response.status_code == 200, response.content
+    response_data = response.json()
+    assert response_data['task_count'] == 2, response_data
+    assert response_data['queue_total'] == 2, response_data
+    assert response_data['queue_done'] == 2, response_data
+    assert response_data['queue_left'] == 0, response_data
+    assert response_data['my_annotation_count'] == 2, response_data
