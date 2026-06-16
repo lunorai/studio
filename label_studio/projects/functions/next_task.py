@@ -8,9 +8,10 @@ from core.utils.db import fast_first
 from django.conf import settings
 from django.db.models import BooleanField, Case, Count, Exists, F, Max, OuterRef, Q, QuerySet, Value, When
 from django.db.models.fields import DecimalField
+from django.utils.timezone import now
 from projects.functions.stream_history import add_stream_history
 from projects.models import Project
-from tasks.models import Annotation, Task
+from tasks.models import Annotation, Task, TaskLock
 from users.models import User
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,12 @@ def _get_first_unlocked(tasks_query: QuerySet[Task], user) -> Union[Task, None]:
 
         except Task.DoesNotExist:
             logger.debug('Task with id {} locked'.format(task_id))
+
+
+def _get_first_available_for_user_progress(tasks_query: QuerySet[Task], user: User) -> Union[Task, None]:
+    active_locks = TaskLock.objects.filter(task_id=OuterRef('pk'), expire_at__gt=now()).exclude(user=user)
+    available_tasks = tasks_query.annotate(has_active_lock=Exists(active_locks)).filter(has_active_lock=False)
+    return fast_first(available_tasks)
 
 
 def _try_ground_truth(tasks: QuerySet[Task], project: Project, user: User) -> Union[Task, None]:
@@ -285,6 +292,37 @@ def get_next_task_without_dm_queue(
     return next_task, use_task_lock, queue_info
 
 
+def get_next_task_for_user_progress(
+    user: User,
+    not_solved_tasks: QuerySet,
+    assigned_flag: Union[bool, None],
+) -> Tuple[Union[Task, None], bool, str]:
+    next_task = None
+    use_task_lock = True
+    queue_info = ''
+
+    if assigned_flag:
+        logger.debug(f'User={user} try to get task from assigned user-progress queue')
+        next_task = not_solved_tasks.first()
+        use_task_lock = False
+        queue_info += (' & ' if queue_info else '') + 'Manually assigned queue'
+
+    if not next_task:
+        next_task = Task.get_locked_by(user, tasks=not_solved_tasks)
+        if next_task:
+            logger.debug(f'User={user} got already locked for them {next_task} in user-progress queue')
+            use_task_lock = False
+            queue_info += (' & ' if queue_info else '') + 'Task lock'
+
+    if not next_task:
+        logger.debug(f'User={user} tries user-progress queue from prepared tasks')
+        next_task = _get_first_available_for_user_progress(not_solved_tasks, user)
+        if next_task:
+            queue_info += (' & ' if queue_info else '') + 'User progress queue'
+
+    return next_task, use_task_lock, queue_info
+
+
 def skipped_queue(next_task, prepared_tasks, project, user, assigned_flag, queue_info, allow_completed_tasks=False):
     if not next_task and project.skip_queue == project.SkipQueue.REQUEUE_FOR_ME:
         q = Q(project=project, task__isnull=False, was_cancelled=True)
@@ -378,15 +416,23 @@ def get_next_task(
         use_task_lock = True
         queue_info = ''
         allow_completed_tasks = label_stream_mode == 'all'
+        resume_from_user_progress = allow_completed_tasks
 
         not_solved_tasks, user_solved_tasks_array, queue_info, prioritized_low_agreement = get_not_solved_tasks_qs(
             user, project, prepared_tasks, assigned_flag, queue_info, label_stream_mode=label_stream_mode
         )
 
         if not dm_queue:
-            next_task, use_task_lock, queue_info = get_next_task_without_dm_queue(
-                user, project, not_solved_tasks, assigned_flag, prioritized_low_agreement
-            )
+            if resume_from_user_progress:
+                next_task, use_task_lock, queue_info = get_next_task_for_user_progress(
+                    user,
+                    not_solved_tasks,
+                    assigned_flag,
+                )
+            else:
+                next_task, use_task_lock, queue_info = get_next_task_without_dm_queue(
+                    user, project, not_solved_tasks, assigned_flag, prioritized_low_agreement
+                )
 
         if flag_set('fflag_fix_back_lsdv_4523_show_overlap_first_order_27022023_short'):
             # show tasks with overlap > 1 first
