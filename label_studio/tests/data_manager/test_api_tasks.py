@@ -173,3 +173,54 @@ def test_views_tasks_api_fast_counts_use_task_counters(business_client, project_
     count_queries = [query['sql'].lower() for query in queries.captured_queries if 'count(' in query['sql'].lower()]
     assert not any('task_annotation' in query for query in count_queries), count_queries
     assert not any('task_prediction' in query for query in count_queries), count_queries
+
+
+@pytest.mark.django_db
+def test_views_tasks_api_fast_mode_keeps_view_filters(business_client, project_id):
+    payload = {
+        'project': project_id,
+        'data': {
+            'filters': {
+                'conjunction': 'and',
+                'items': [
+                    {
+                        'filter': 'filter:tasks:data.text',
+                        'operator': 'contains',
+                        'type': 'String',
+                        'value': 'match',
+                    }
+                ],
+            }
+        },
+    }
+    response = business_client.post(
+        '/api/dm/views/',
+        data=json.dumps(payload),
+        content_type='application/json',
+    )
+
+    assert response.status_code == 201, response.content
+    view_id = response.json()['id']
+
+    project = Project.objects.get(pk=project_id)
+    matching_task = make_task({'data': {'text': 'please match me'}}, project)
+    make_task({'data': {'text': 'skip this task'}}, project)
+
+    make_annotation({'result': []}, matching_task.id)
+    make_prediction({'result': []}, matching_task.id)
+
+    response = business_client.get(
+        f'/api/tasks?page=1&page_size=15'
+        f'&include_annotation_counts=true'
+        f'&include_user_annotation_counts=true'
+        f'&include_prediction_counts=true'
+        f'&view={view_id}&project={project_id}'
+    )
+
+    assert response.status_code == 200, response.content
+    response_data = response.json()
+    assert response_data['total'] == 1, response_data
+    assert response_data['total_annotations'] == 1, response_data
+    assert response_data['total_predictions'] == 1, response_data
+    assert response_data['total_user_annotations'] == 0, response_data
+    assert [task['id'] for task in response_data['tasks']] == [matching_task.id], response_data
