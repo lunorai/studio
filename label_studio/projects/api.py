@@ -5,33 +5,32 @@ This file and its contents are licensed under the Apache License 2.0. Please see
 import logging
 import os
 import pathlib
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from projects.models import Project
-
-import logging
-import os
-import pathlib
+import shutil
+from datetime import datetime
+from urllib.parse import urlsplit, urlunsplit
+import ujson as json
 
 from core.filters import ListFilter
 from core.feature_flags import flag_set
 from core.label_config import config_essential_data_has_changed
 from core.mixins import GetParentObjectMixin
 from core.permissions import ViewClassPermission, all_permissions
-from core.redis import start_job_async_or_sync
-from core.utils.common import paginator, paginator_help, temporary_disconnect_all_signals
+from core.redis import redis_connected, start_job_async_or_sync
+from core.utils.cache import bump_project_cache_version, get_project_cache_version
+from core.utils.common import batched_iterator, paginator, paginator_help, temporary_disconnect_all_signals
 from core.utils.exceptions import LabelStudioDatabaseException, ProjectExistException
 from core.utils.filterset_to_openapi_params import filterset_to_openapi_params
-from core.utils.io import find_dir, find_file, read_yaml
+from core.utils.io import find_dir, find_file, get_all_files_from_dir, get_temp_dir, read_yaml
 from core.utils.params import bool_from_request
 from core.utils.serializer_to_openapi_params import serializer_to_openapi_params
 from data_manager.functions import filters_ordering_selected_items_exist, get_prepared_queryset
 from data_export.serializers import ExportDataSerializer
 from django.conf import settings
+from django.core.cache import cache
+from django.core.files import File
+from django.core.files import temp as tempfile
 from django.db import IntegrityError
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, F, Prefetch, Q, Sum
 from django.http import Http404
 from django.utils.decorators import method_decorator
 from django_filters import CharFilter, FilterSet
@@ -66,8 +65,8 @@ from rest_framework import serializers
 import requests
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
-from rest_framework.views import exception_handler
-from tasks.models import Annotation, Task
+from rest_framework.views import APIView, exception_handler
+from tasks.models import Annotation, AnnotationDraft, Prediction, Task
 from tasks.serializers import (
     NextTaskSerializer,
     TaskSerializer,
@@ -84,6 +83,725 @@ from label_studio.core.utils.common import load_func
 logger = logging.getLogger(__name__)
 
 ProjectImportPermission = load_func(settings.PROJECT_IMPORT_PERMISSION)
+FINAL_SUBMISSION_CHECK_CACHE_TIMEOUT = 60
+FINAL_SUBMISSION_UPLOAD_CACHE_TIMEOUT = 60 * 60 * 24
+FINAL_SUBMISSION_UPLOAD_ACTIVE_STATUSES = {
+    'accepted',
+    'queued',
+    'exporting',
+    'converting',
+    'requesting_upload_url',
+    'uploading',
+    'finalizing',
+}
+FINAL_SUBMISSION_UPLOAD_BLOCKING_STATUSES = FINAL_SUBMISSION_UPLOAD_ACTIVE_STATUSES | {'completed'}
+
+
+def _get_final_submission_file_copy_buffer_size():
+    return int(getattr(settings, 'FINAL_SUBMISSION_FILE_COPY_BUFFER_SIZE', 8 * 1024 * 1024))
+
+
+def _get_final_submission_export_batch_size(project):
+    configured = int(getattr(settings, 'FINAL_SUBMISSION_EXPORT_BATCH_SIZE', 5000))
+    project_batch_size = project.get_task_batch_size()
+    if project_batch_size < configured // 4:
+        return max(project_batch_size, 1)
+    return configured
+
+
+def _final_submission_export_serializer_kwargs():
+    options = _final_submission_serialization_options()
+    kwargs = {
+        'many': True,
+        'context': {'interpolate_key_frames': options.get('interpolate_key_frames', False)},
+    }
+    if options.get('include_annotation_history') is False:
+        kwargs['omit'] = ['annotations.history']
+    return kwargs
+
+
+def _normalize_submission_scope_value(value):
+    return None if value in ('', None) else value
+
+
+def _final_submission_check_cache_key(project_id, user_id):
+    version = get_project_cache_version(project_id)
+    return f'final_submission_check:{project_id}:{user_id}:v{version}'
+
+
+def _final_submission_upload_cache_key(project_id, user_id):
+    version = get_project_cache_version(project_id)
+    return f'final_submission_upload:{project_id}:{user_id}:v{version}'
+
+
+def _final_submission_upload_info_cache_key(project_id, user_id):
+    version = get_project_cache_version(project_id)
+    return f'final_submission_upload_info:{project_id}:{user_id}:v{version}'
+
+
+def _final_submission_export_title(user_id):
+    return f'Final submission (user {user_id})'
+
+
+def _final_submission_task_filter_options(studio_user_id):
+    return {
+        'annotated': 'only',
+        'only_with_annotations': True,
+        'completed_by': studio_user_id,
+    }
+
+
+def _final_submission_annotation_filter_options(studio_user_id):
+    return {
+        'usual': True,
+        'completed_by': studio_user_id,
+    }
+
+
+def _final_submission_serialization_options():
+    return {
+        'include_annotation_history': False,
+        'interpolate_key_frames': False,
+    }
+
+
+def _augment_final_submission_upload_payload(payload, project_id):
+    if not isinstance(payload, dict):
+        return {'status': 'idle', 'percent': 0, 'message': 'Ready to submit final annotations.'}
+
+    response_payload = dict(payload)
+    export_id = response_payload.get('export_id')
+    if export_id:
+        response_payload['download_url'] = f'/api/projects/{project_id}/exports/{export_id}/download?exportType=CSV'
+    lunor_submission_id = response_payload.get('lunor_submission_id')
+    if lunor_submission_id is not None and 'submission_id' not in response_payload:
+        response_payload['submission_id'] = lunor_submission_id
+    return response_payload
+
+
+def _get_final_submission_upload_status(project_id, user_id):
+    payload = cache.get(_final_submission_upload_cache_key(project_id, user_id))
+    return _augment_final_submission_upload_payload(payload, project_id)
+
+
+def _set_final_submission_upload_status(project_id, user_id, status_value, **extra):
+    existing_payload = cache.get(_final_submission_upload_cache_key(project_id, user_id)) or {}
+    payload = {**existing_payload, 'status': status_value, **extra}
+    cache.set(
+        _final_submission_upload_cache_key(project_id, user_id),
+        payload,
+        FINAL_SUBMISSION_UPLOAD_CACHE_TIMEOUT,
+    )
+    return _augment_final_submission_upload_payload(payload, project_id)
+
+
+def _build_final_submission_status(status_value, percent, message, **extra):
+    return {
+        'percent': max(0, min(100, int(percent))),
+        'message': message,
+        'status': status_value,
+        **extra,
+    }
+
+
+def _set_final_submission_stage(project_id, user_id, status_value, percent, message, **extra):
+    return _set_final_submission_upload_status(
+        project_id,
+        user_id,
+        status_value,
+        percent=max(0, min(100, int(percent))),
+        message=message,
+        **extra,
+    )
+
+
+def _final_submission_export_message(processed_tasks, total_tasks):
+    if total_tasks <= 0:
+        return 'Preparing filtered annotation export.'
+    return f'Preparing filtered annotation export ({processed_tasks:,} / {total_tasks:,} tasks).'
+
+
+def _get_final_submission_graphql_endpoint():
+    runtime_graphql = getattr(settings, 'GRAPHQL_ENDPOINT', None)
+    return _resolve_container_localhost_url(
+        runtime_graphql or os.environ.get('GRAPHQL_ENDPOINT') or 'https://prod.100protocol.com/'
+    )
+
+
+def _build_final_submission_filename(project_id, studio_user_id):
+    return f'final-submission-project-{project_id}-user-{studio_user_id}.csv'
+
+
+def _set_final_submission_reserved_upload(project_id, user_id, upload_info, upload_url, url_arr, filename):
+    cache.set(
+        _final_submission_upload_info_cache_key(project_id, user_id),
+        {
+            'upload_info': upload_info,
+            'upload_url': upload_url,
+            'url_arr': url_arr,
+            'filename': filename,
+        },
+        FINAL_SUBMISSION_UPLOAD_CACHE_TIMEOUT,
+    )
+
+
+def _get_final_submission_reserved_upload(project_id, user_id):
+    reserved = cache.get(_final_submission_upload_info_cache_key(project_id, user_id))
+    return reserved if isinstance(reserved, dict) else {}
+
+
+def _clear_final_submission_reserved_upload(project_id, user_id):
+    cache.delete(_final_submission_upload_info_cache_key(project_id, user_id))
+
+
+def _verify_final_submission_eligibility(project, studio_user_id, lunor_user_id):
+    if not _normalize_submission_scope_value(project.challenge_id):
+        return 'Project has no challenge_id; cannot submit final annotations.'
+    if not str(lunor_user_id or '').strip():
+        return 'Missing Lunor user id; cannot submit final annotations.'
+    has_annotations = Task.objects.filter(
+        project_id=project.id,
+        annotations__completed_by_id=studio_user_id,
+    ).exists()
+    if not has_annotations:
+        return 'No submitted annotations found for this user.'
+    return None
+
+
+def _mark_final_submission_check_accepted(project_id, user_id, lunor_submission_id, final_submission_id=None):
+    cache.set(
+        _final_submission_check_cache_key(project_id, user_id),
+        {
+            'exists': True,
+            'id': final_submission_id,
+            'lunor_submission_id': lunor_submission_id,
+            'status': 'accepted' if final_submission_id is None else 'completed',
+        },
+        FINAL_SUBMISSION_CHECK_CACHE_TIMEOUT,
+    )
+
+
+def _mark_final_submission_check_failed(project_id, user_id, error_message):
+    cache.set(
+        _final_submission_check_cache_key(project_id, user_id),
+        {
+            'exists': False,
+            'id': None,
+            'status': 'failed',
+            'error': error_message,
+        },
+        FINAL_SUBMISSION_CHECK_CACHE_TIMEOUT,
+    )
+
+
+def _resolve_final_submission_upload_target(
+    project_id,
+    studio_user_id,
+    lunor_user_id,
+    challenge_id,
+    round_value,
+    reserved_upload=None,
+    refresh=False,
+):
+    reserved_upload = reserved_upload or {}
+    filename = reserved_upload.get('filename') or _build_final_submission_filename(project_id, studio_user_id)
+    if not refresh and reserved_upload.get('upload_url') and reserved_upload.get('upload_info'):
+        return (
+            reserved_upload['upload_info'],
+            reserved_upload['upload_url'],
+            reserved_upload.get('url_arr') or [],
+            filename,
+        )
+
+    upload_info, upload_url, url_arr = _request_final_submission_upload_url(
+        _get_final_submission_graphql_endpoint(),
+        challenge_id,
+        str(lunor_user_id).strip(),
+        round_value,
+        filename,
+    )
+    _set_final_submission_reserved_upload(project_id, studio_user_id, upload_info, upload_url, url_arr, filename)
+    return upload_info, upload_url, url_arr, filename
+
+
+def _resolve_container_localhost_url(url_value):
+    endpoint = str(url_value or '').strip()
+    if not endpoint or not os.path.exists('/.dockerenv'):
+        return endpoint
+
+    try:
+        parsed = urlsplit(endpoint)
+    except ValueError:
+        return endpoint
+
+    if parsed.hostname not in {'localhost', '127.0.0.1', '0.0.0.0'}:
+        return endpoint
+
+    auth = ''
+    if parsed.username:
+        auth = parsed.username
+        if parsed.password:
+            auth += f':{parsed.password}'
+        auth += '@'
+
+    port = f':{parsed.port}' if parsed.port else ''
+    resolved = urlunsplit(
+        (
+            parsed.scheme,
+            f'{auth}host.docker.internal{port}',
+            parsed.path,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
+    logger.info('Resolved container-local GraphQL endpoint %s -> %s', endpoint, resolved)
+    return resolved
+
+
+class _FinalSubmissionUploadProgressStream:
+    def __init__(self, stream, total_bytes, progress_callback):
+        self._stream = stream
+        self._total_bytes = max(int(total_bytes or 0), 1)
+        self._progress_callback = progress_callback
+        self._bytes_read = 0
+        self._last_percent = -1
+
+    def read(self, size=-1):
+        chunk = self._stream.read(size)
+        if chunk:
+            self._bytes_read += len(chunk)
+            percent = int((self._bytes_read * 100) / self._total_bytes)
+            if percent != self._last_percent:
+                self._last_percent = percent
+                self._progress_callback(self._bytes_read, self._total_bytes)
+        return chunk
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+
+def _get_existing_final_submission(project_id, user_id, challenge_id, round_value):
+    return (
+        FinalSubmission.objects.filter(
+            project_id=project_id,
+            user_id=user_id,
+            challenge_id=challenge_id,
+            round=round_value,
+        )
+        .values('id')
+        .first()
+    )
+
+
+def _get_final_submission_tasks_queryset(project_id, studio_user_id, task_ids):
+    annotation_qs = Annotation.objects.filter(project_id=project_id, completed_by_id=studio_user_id).select_related(
+        'completed_by'
+    )
+    draft_qs = AnnotationDraft.objects.only('id', 'task_id')
+    prediction_qs = Prediction.objects.only('id', 'task_id')
+
+    return (
+        Task.objects.filter(project_id=project_id, id__in=task_ids)
+        .select_related('project', 'file_upload')
+        .prefetch_related(
+            Prefetch('annotations', queryset=annotation_qs),
+            Prefetch('drafts', queryset=draft_qs),
+            Prefetch('predictions', queryset=prediction_qs),
+        )
+        .order_by('id')
+    )
+
+
+def _write_final_submission_export_content(export_file, project, user, total_tasks, progress_callback=None, export_id=None):
+    task_ids_qs = (
+        Task.objects.filter(project_id=project.id, annotations__completed_by_id=user.id)
+        .distinct()
+        .order_by('id')
+        .values_list('id', flat=True)
+    )
+    processed_tasks = 0
+    batch_size = _get_final_submission_export_batch_size(project)
+    serializer_kwargs = _final_submission_export_serializer_kwargs()
+
+    export_file.write(b'[')
+    first_task = True
+
+    for task_ids_batch in batched_iterator(task_ids_qs.iterator(chunk_size=batch_size), batch_size):
+        task_batch = _get_final_submission_tasks_queryset(project.id, user.id, task_ids_batch)
+        serialized_tasks = ExportDataSerializer(task_batch, **serializer_kwargs).data
+
+        for task in serialized_tasks:
+            if not first_task:
+                export_file.write(b',')
+            export_file.write(json.dumps(task, ensure_ascii=False).encode('utf-8'))
+            first_task = False
+
+        processed_tasks += len(serialized_tasks)
+        if progress_callback:
+            export_percent = 10 if total_tasks <= 0 else 10 + int((processed_tasks * 50) / total_tasks)
+            progress_callback(
+                _build_final_submission_status(
+                    'exporting',
+                    export_percent,
+                    _final_submission_export_message(processed_tasks, total_tasks),
+                    export_id=export_id,
+                    progress_current=processed_tasks,
+                    progress_total=total_tasks,
+                )
+            )
+
+    export_file.write(b']')
+    export_file.flush()
+    return processed_tasks
+
+
+def _create_final_submission_export_snapshot(project, user, progress_callback=None, export_file_path=None):
+    from data_export.models import Export
+
+    export = Export.objects.create(
+        title=_final_submission_export_title(user.id),
+        project=project,
+        created_by=user,
+    )
+
+    task_ids_qs = (
+        Task.objects.filter(project_id=project.id, annotations__completed_by_id=user.id)
+        .distinct()
+        .order_by('id')
+        .values_list('id', flat=True)
+    )
+    total_tasks = task_ids_qs.count()
+    processed_tasks = 0
+
+    export.status = Export.Status.IN_PROGRESS
+    export.counters = {'task_number': total_tasks}
+    export.save(update_fields=['status', 'counters'])
+
+    if progress_callback:
+        progress_callback(
+            _build_final_submission_status(
+                'exporting',
+                10,
+                _final_submission_export_message(0, total_tasks),
+                export_id=export.id,
+                progress_current=0,
+                progress_total=total_tasks,
+            )
+        )
+
+    try:
+        if export_file_path is not None:
+            export_path = pathlib.Path(export_file_path)
+            export_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(export_path, 'wb') as export_file:
+                processed_tasks = _write_final_submission_export_content(
+                    export_file,
+                    project,
+                    user,
+                    total_tasks,
+                    progress_callback=progress_callback,
+                    export_id=export.id,
+                )
+            with open(export_path, 'rb') as export_file:
+                md5 = Export.eval_md5(export_file)
+                export_file.seek(0)
+                export.save_file(export_file, md5)
+        else:
+            with tempfile.NamedTemporaryFile(suffix='.export.json', dir=settings.FILE_UPLOAD_TEMP_DIR) as export_file:
+                processed_tasks = _write_final_submission_export_content(
+                    export_file,
+                    project,
+                    user,
+                    total_tasks,
+                    progress_callback=progress_callback,
+                    export_id=export.id,
+                )
+                export_file.seek(0)
+                md5 = Export.eval_md5(export_file)
+                export_file.seek(0)
+                export.save_file(export_file, md5)
+
+        export.status = Export.Status.COMPLETED
+        export.save(update_fields=['status'])
+    except Exception:
+        export.status = Export.Status.FAILED
+        export.save(update_fields=['status'])
+        raise
+    finally:
+        export.finished_at = datetime.now()
+        export.save(update_fields=['finished_at'])
+
+    if progress_callback:
+        progress_callback(
+            _build_final_submission_status(
+                'exporting',
+                60,
+                _final_submission_export_message(processed_tasks, total_tasks),
+                export_id=export.id,
+                progress_current=processed_tasks,
+                progress_total=total_tasks,
+            )
+        )
+
+    return export
+
+
+def _convert_final_submission_export_to_csv(
+    export,
+    project,
+    user,
+    hostname,
+    input_file_path=None,
+    work_dir=None,
+    output_filename=None,
+):
+    from data_export.models import ConvertedFormat
+    from label_studio_sdk.converter import Converter
+
+    converted_format = ConvertedFormat.objects.create(
+        export=export,
+        export_type='CSV',
+        project=project,
+        organization=project.organization,
+        created_by=user,
+        status=ConvertedFormat.Status.IN_PROGRESS,
+    )
+
+    copy_buffer_size = _get_final_submission_file_copy_buffer_size()
+
+    def _convert_in_directory(tmp_dir):
+        out_dir = pathlib.Path(tmp_dir) / 'out'
+        out_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+        converter = Converter(
+            config=project.get_parsed_config(),
+            project_dir=None,
+            upload_dir=out_dir,
+            download_resources=False,
+            access_token=project.organization.created_by.auth_token.key,
+            hostname=hostname,
+        )
+
+        if input_file_path:
+            source_path = pathlib.Path(input_file_path)
+            input_name = source_path.name
+        else:
+            input_name = pathlib.Path(export.file.name).name
+            source_path = pathlib.Path(tmp_dir) / input_name
+            with export.file.open('rb') as source, open(source_path, 'wb') as target:
+                shutil.copyfileobj(source, target, length=copy_buffer_size)
+
+        converter.convert(source_path, out_dir, 'CSV', is_dir=False)
+        output_files = get_all_files_from_dir(out_dir)
+        if len(output_files) != 1:
+            raise RuntimeError('CSV conversion did not produce exactly one file.')
+        return output_files[0], input_name
+
+    try:
+        if work_dir:
+            output_file, input_name = _convert_in_directory(work_dir)
+        else:
+            with get_temp_dir() as tmp_dir:
+                output_file, input_name = _convert_in_directory(tmp_dir)
+
+        output_ext = pathlib.Path(output_file).suffix or '.csv'
+        if output_filename:
+            stored_name = f'{project.id}/{output_filename}'
+        else:
+            stored_name = f'{project.id}/{pathlib.Path(input_name).stem}{output_ext}'
+
+        with open(output_file, 'rb') as converted_stream:
+            converted_format.file.save(stored_name, File(converted_stream, name=stored_name))
+
+        converted_format.status = ConvertedFormat.Status.COMPLETED
+        converted_format.save(update_fields=['file', 'status'])
+        return converted_format, output_file
+    except Exception:
+        converted_format.status = ConvertedFormat.Status.FAILED
+        converted_format.save(update_fields=['status'])
+        raise
+
+
+def _request_final_submission_upload_url(graphql_endpoint, challenge_id, graphql_user_id, round_value, filename):
+    gql_query = (
+        "query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {"
+        "  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {"
+        "    submissionId"
+        "    urlArr { url key }"
+        "  }"
+        "}"
+    )
+    try:
+        response = requests.post(
+            graphql_endpoint,
+            json={
+                'query': gql_query,
+                'variables': {
+                    'challengeId': int(challenge_id),
+                    'userId': graphql_user_id,
+                    'round': int(round_value or 1),
+                    'filename': filename,
+                },
+            },
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            'Final submission could not reach the Quest GraphQL endpoint '
+            f'({graphql_endpoint}). If you are running Docker locally, use '
+            'http://host.docker.internal:5000/graphql or another container-reachable URL.'
+        ) from exc
+    if response.status_code >= 400:
+        raise RuntimeError(f'GraphQL getAnnotationUploadUrl failed: {response.status_code}')
+
+    payload = response.json()
+    graphql_errors = payload.get('errors') or []
+    if graphql_errors:
+        raise RuntimeError(graphql_errors[0].get('message') or 'GraphQL getAnnotationUploadUrl failed.')
+    upload_info = (payload.get('data') or {}).get('getAnnotationUploadUrl') or {}
+    url_arr = upload_info.get('urlArr') or []
+    upload_url = (url_arr[0] or {}).get('url') if isinstance(url_arr, list) and url_arr else None
+    if not upload_url:
+        raise RuntimeError('No upload URL returned from GraphQL.')
+    return upload_info, upload_url, url_arr
+
+
+def _upload_final_submission_csv(upload_url, converted_format, progress_callback=None, local_file_path=None):
+    filename = os.path.basename(local_file_path or converted_format.file.name)
+    read_timeout = int(getattr(settings, 'FINAL_SUBMISSION_UPLOAD_READ_TIMEOUT', 4 * 60 * 60))
+
+    if local_file_path:
+        file_size = os.path.getsize(local_file_path)
+        file_handle = open(local_file_path, 'rb')
+        should_close = True
+    else:
+        file_size = converted_format.file.size
+        file_handle = converted_format.file.open('rb')
+        should_close = False
+
+    try:
+        upload_stream = file_handle
+        if progress_callback:
+            upload_stream = _FinalSubmissionUploadProgressStream(file_handle, file_size, progress_callback)
+        response = requests.put(
+            upload_url,
+            data=upload_stream,
+            headers={
+                'Content-Type': 'text/csv',
+                'Content-Length': str(file_size),
+            },
+            timeout=(60, read_timeout),
+        )
+    finally:
+        if should_close:
+            file_handle.close()
+
+    if response.status_code >= 400:
+        raise RuntimeError(f'Upload failed: {response.status_code}')
+    return filename
+
+
+def _upload_final_submission_csv_with_retry(
+    project_id,
+    studio_user_id,
+    lunor_user_id,
+    challenge_id,
+    round_value,
+    upload_url,
+    converted_format,
+    local_file_path,
+    progress_callback=None,
+):
+    try:
+        uploaded_filename = _upload_final_submission_csv(
+            upload_url,
+            converted_format,
+            progress_callback=progress_callback,
+            local_file_path=local_file_path,
+        )
+    except RuntimeError:
+        logger.warning(
+            'Final submission upload failed for project_id=%s studio_user_id=%s; refreshing upload URL.',
+            project_id,
+            studio_user_id,
+        )
+        upload_info, refreshed_upload_url, url_arr, _filename = _resolve_final_submission_upload_target(
+            project_id,
+            studio_user_id,
+            lunor_user_id,
+            challenge_id,
+            round_value,
+            refresh=True,
+        )
+        uploaded_filename = _upload_final_submission_csv(
+            refreshed_upload_url,
+            converted_format,
+            progress_callback=progress_callback,
+            local_file_path=local_file_path,
+        )
+        return uploaded_filename, upload_info, url_arr
+
+    reserved = _get_final_submission_reserved_upload(project_id, studio_user_id)
+    return uploaded_filename, reserved.get('upload_info') or {}, reserved.get('url_arr') or []
+
+
+def _update_final_submission_asset_list(
+    graphql_endpoint, upload_info, asset_keys, challenge_id, round_value, graphql_user_id
+):
+    update_mutation = (
+        "mutation UpdateSubmissionAssetList($submissionId: Int, $challengeId: Int, $round: Int, $userId: String!, $asset_list: [String!]!) {"
+        "  updateSubmissionAssetList("
+        "    submissionId: $submissionId"
+        "    challengeId: $challengeId"
+        "    round: $round"
+        "    userId: $userId"
+        "    asset_list: $asset_list"
+        "  )"
+        "}"
+    )
+    try:
+        response = requests.post(
+            graphql_endpoint,
+            json={
+                'query': update_mutation,
+                'variables': {
+                    'submissionId': upload_info.get('submissionId'),
+                    'challengeId': int(challenge_id),
+                    'round': int(round_value or 1),
+                    'userId': graphql_user_id,
+                    'asset_list': asset_keys,
+                },
+            },
+            timeout=60,
+        )
+    except requests.RequestException as exc:
+        raise RuntimeError(
+            'Final submission uploaded the CSV but could not finalize it on the Quest platform '
+            f'because the GraphQL endpoint {graphql_endpoint} was unreachable.'
+        ) from exc
+    if response.status_code >= 400:
+        raise RuntimeError(f'GraphQL updateSubmissionAssetList failed: {response.status_code}')
+    payload = response.json()
+    graphql_errors = payload.get('errors') or []
+    if graphql_errors:
+        raise RuntimeError(graphql_errors[0].get('message') or 'GraphQL updateSubmissionAssetList failed.')
+    return response
+
+
+def _serialize_final_submission_tasks(project, studio_user_id):
+    task_ids = list(
+        Task.objects.filter(project_id=project.id, annotations__completed_by_id=studio_user_id)
+        .distinct()
+        .order_by('id')
+        .values_list('id', flat=True)
+    )
+    tasks_qs = _get_final_submission_tasks_queryset(project.id, studio_user_id, task_ids)
+
+    return ExportDataSerializer(
+        tasks_qs,
+        many=True,
+        context={'interpolate_key_frames': False},
+    ).data
 
 _result_schema = {
     'title': 'Labeling result',
@@ -619,6 +1337,10 @@ class ProjectAPI(generics.RetrieveUpdateDestroyAPIView):
 
         return super(ProjectAPI, self).patch(request, *args, **kwargs)
 
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        bump_project_cache_version(instance.id)
+
     def perform_destroy(self, instance):
         # we don't need to relaculate counters if we delete whole project
         with temporary_disconnect_all_signals():
@@ -646,17 +1368,54 @@ class FinalSubmissionCheckAPI(generics.GenericAPIView):
         },
     )
     def get(self, request, pk):
-        project = generics.get_object_or_404(Project, pk=pk)
-        user = request.user
-        challenge_id = project.challenge_id or None
-        round_value = project.round or None
-        record = FinalSubmission.objects.filter(
-            project=project, user=user, challenge_id=challenge_id, round=round_value
-        ).first()
-        return Response({
-            'exists': bool(record),
-            'id': record.id if record else None,
-        })
+        cache_key = _final_submission_check_cache_key(pk, request.user.id)
+        cached_payload = cache.get(cache_key)
+        if cached_payload is not None:
+            return Response(cached_payload)
+
+        upload_payload = cache.get(_final_submission_upload_cache_key(pk, request.user.id)) or {}
+        upload_status = upload_payload.get('status')
+        if upload_status in FINAL_SUBMISSION_UPLOAD_BLOCKING_STATUSES:
+            payload = {
+                'exists': True,
+                'id': upload_payload.get('final_submission_id'),
+                'lunor_submission_id': upload_payload.get('lunor_submission_id'),
+                'status': upload_status,
+            }
+            cache.set(cache_key, payload, FINAL_SUBMISSION_CHECK_CACHE_TIMEOUT)
+            return Response(payload)
+        if upload_status == 'failed':
+            payload = {
+                'exists': False,
+                'id': None,
+                'status': 'failed',
+                'error': upload_payload.get('error'),
+            }
+            cache.set(cache_key, payload, FINAL_SUBMISSION_CHECK_CACHE_TIMEOUT)
+            return Response(payload)
+
+        project_scope = Project.objects.filter(pk=pk).values('challenge_id', 'round').first()
+        if project_scope is None:
+            raise Http404
+
+        challenge_id = _normalize_submission_scope_value(project_scope['challenge_id'])
+        round_value = _normalize_submission_scope_value(project_scope['round'])
+        submission_id = (
+            FinalSubmission.objects.filter(
+                project_id=pk,
+                user_id=request.user.id,
+                challenge_id=challenge_id,
+                round=round_value,
+            )
+            .values_list('id', flat=True)
+            .first()
+        )
+        payload = {
+            'exists': submission_id is not None,
+            'id': submission_id,
+        }
+        cache.set(cache_key, payload, FINAL_SUBMISSION_CHECK_CACHE_TIMEOUT)
+        return Response(payload)
 
 
 class FinalSubmissionCreateAPI(generics.GenericAPIView):
@@ -671,15 +1430,18 @@ class FinalSubmissionCreateAPI(generics.GenericAPIView):
         responses={201: OpenApiResponse(description='Created'), 200: OpenApiResponse(description='Already exists')},
     )
     def post(self, request, pk):
-        project = generics.get_object_or_404(Project, pk=pk)
         user = request.user
         lunor_user_id = getattr(user, 'lunor_userId', None)
-        challenge_id = project.challenge_id if project.challenge_id not in ['', None] else None
-        round_value = project.round if project.round not in ['', None] else None
+        project_scope = Project.objects.filter(pk=pk).values('challenge_id', 'round').first()
+        if project_scope is None:
+            raise Http404
+
+        challenge_id = _normalize_submission_scope_value(project_scope['challenge_id'])
+        round_value = _normalize_submission_scope_value(project_scope['round'])
 
         obj, created = FinalSubmission.objects.get_or_create(
-            project=project,
-            user=user,
+            project_id=pk,
+            user_id=user.id,
             challenge_id=challenge_id,
             round=round_value,
             defaults={
@@ -687,6 +1449,8 @@ class FinalSubmissionCreateAPI(generics.GenericAPIView):
                 'lunor_user_id': lunor_user_id or '',
             },
         )
+        new_cache_key = _final_submission_check_cache_key(pk, user.id)
+        cache.set(new_cache_key, {'exists': True, 'id': obj.id}, FINAL_SUBMISSION_CHECK_CACHE_TIMEOUT)
         status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response({'id': obj.id, 'created': created}, status=status_code)
 
@@ -703,196 +1467,332 @@ class LunorSubmissionAssetsUploadSerializer(serializers.Serializer):
     assets_list_check = serializers.BooleanField(required=False, default=True)
 
 
+class LunorSubmissionAssetsUploadStatusSerializer(serializers.Serializer):
+    studio_project_id = serializers.IntegerField()
+    studio_user_id = serializers.IntegerField()
+
+
+def _run_lunor_submission_assets_upload(
+    project_id,
+    studio_user_id,
+    lunor_user_id,
+    lunor_submission_id=None,
+    assets_list_check=True,
+    hostname=None,
+):
+    project = Project.objects.get(pk=project_id)
+    user = User.objects.get(pk=studio_user_id)
+    challenge_id = _normalize_submission_scope_value(project.challenge_id)
+    round_value = _normalize_submission_scope_value(project.round)
+    graphql_user_id = str(lunor_user_id).strip()
+
+    existing_record = _get_existing_final_submission(project_id, studio_user_id, challenge_id, round_value)
+    if existing_record:
+        cache.set(
+            _final_submission_check_cache_key(project_id, studio_user_id),
+            {'exists': True, 'id': existing_record['id']},
+            FINAL_SUBMISSION_CHECK_CACHE_TIMEOUT,
+        )
+        _set_final_submission_stage(
+            project_id,
+            studio_user_id,
+            'completed',
+            100,
+            'Final submission already exists.',
+            success=True,
+            final_submission_id=existing_record['id'],
+        )
+        return
+
+    if not challenge_id:
+        _set_final_submission_stage(
+            project_id,
+            studio_user_id,
+            'failed',
+            100,
+            'Final submission failed before upload started.',
+            success=False,
+            error='Project has no challenge_id; cannot request upload URL.',
+        )
+        return
+
+    runtime_graphql = getattr(settings, 'GRAPHQL_ENDPOINT', None)
+    graphql_endpoint = _resolve_container_localhost_url(
+        runtime_graphql or os.environ.get('GRAPHQL_ENDPOINT') or 'https://prod.100protocol.com/'
+    )
+    reserved_upload = _get_final_submission_reserved_upload(project_id, studio_user_id)
+    submission_filename = reserved_upload.get('filename') or _build_final_submission_filename(project_id, studio_user_id)
+
+    try:
+        _set_final_submission_stage(
+            project_id,
+            studio_user_id,
+            'exporting',
+            5,
+            'Preparing filtered annotation export in the background.',
+            lunor_submission_id=reserved_upload.get('upload_info', {}).get('submissionId') or lunor_submission_id,
+        )
+        with get_temp_dir() as tmp_dir:
+            export_json_path = pathlib.Path(tmp_dir) / 'export.json'
+            export = _create_final_submission_export_snapshot(
+                project,
+                user,
+                progress_callback=lambda payload: _set_final_submission_upload_status(
+                    project_id,
+                    studio_user_id,
+                    payload['status'],
+                    **{key: value for key, value in payload.items() if key != 'status'},
+                ),
+                export_file_path=export_json_path,
+            )
+
+            _set_final_submission_stage(
+                project_id,
+                studio_user_id,
+                'converting',
+                70,
+                'Converting filtered export to CSV.',
+                export_id=export.id,
+            )
+            converted_format, csv_local_path = _convert_final_submission_export_to_csv(
+                export,
+                project,
+                user,
+                hostname,
+                input_file_path=export_json_path,
+                work_dir=tmp_dir,
+                output_filename=submission_filename,
+            )
+
+            _set_final_submission_stage(
+                project_id,
+                studio_user_id,
+                'uploading',
+                82,
+                'Uploading CSV to final submission storage.',
+                export_id=export.id,
+                converted_format_id=converted_format.id,
+            )
+            upload_info, upload_url, url_arr, submission_filename = _resolve_final_submission_upload_target(
+                project_id,
+                studio_user_id,
+                lunor_user_id,
+                challenge_id,
+                round_value,
+                reserved_upload=reserved_upload,
+            )
+            uploaded_filename, upload_info, url_arr = _upload_final_submission_csv_with_retry(
+                project_id,
+                studio_user_id,
+                lunor_user_id,
+                challenge_id,
+                round_value,
+                upload_url,
+                converted_format,
+                csv_local_path,
+                progress_callback=lambda bytes_sent, total_bytes: _set_final_submission_stage(
+                    project_id,
+                    studio_user_id,
+                    'uploading',
+                    82 + int((bytes_sent * 13) / max(total_bytes, 1)),
+                    f'Uploading CSV to final submission storage ({bytes_sent:,} / {total_bytes:,} bytes).',
+                    export_id=export.id,
+                    converted_format_id=converted_format.id,
+                    progress_current=bytes_sent,
+                    progress_total=total_bytes,
+                ),
+            )
+
+        asset_keys = [item.get('key') for item in url_arr if isinstance(item, dict) and item.get('key')]
+        if not asset_keys:
+            raise RuntimeError('No asset keys returned from GraphQL urlArr.')
+
+        _set_final_submission_stage(
+            project_id,
+            studio_user_id,
+            'finalizing',
+            97,
+            'Finalizing submission on Quest platform.',
+            export_id=export.id,
+            converted_format_id=converted_format.id,
+            uploaded_filename=uploaded_filename,
+        )
+        _update_final_submission_asset_list(
+            graphql_endpoint,
+            upload_info,
+            asset_keys,
+            challenge_id,
+            round_value,
+            graphql_user_id,
+        )
+
+        final_submission, _created = FinalSubmission.objects.get_or_create(
+            project_id=project_id,
+            user_id=studio_user_id,
+            challenge_id=challenge_id,
+            round=round_value,
+            defaults={
+                'submitted_user_id': studio_user_id,
+                'lunor_user_id': getattr(user, 'lunor_userId', None) or '',
+            },
+        )
+        _mark_final_submission_check_accepted(
+            project_id,
+            studio_user_id,
+            upload_info.get('submissionId') or lunor_submission_id,
+            final_submission_id=final_submission.id,
+        )
+        _clear_final_submission_reserved_upload(project_id, studio_user_id)
+        _set_final_submission_stage(
+            project_id,
+            studio_user_id,
+            'completed',
+            100,
+            'Final submission uploaded successfully.',
+            success=True,
+            export_id=export.id,
+            converted_format_id=converted_format.id,
+            uploaded_filename=uploaded_filename,
+            asset_keys=asset_keys,
+            final_submission_id=final_submission.id,
+            lunor_submission_id=upload_info.get('submissionId') or lunor_submission_id,
+            assets_list_check=assets_list_check,
+        )
+    except Exception as exc:
+        logger.exception(
+            'Final submission upload failed for project_id=%s studio_user_id=%s',
+            project_id,
+            studio_user_id,
+        )
+        current_payload = cache.get(_final_submission_upload_cache_key(project_id, studio_user_id)) or {}
+        _mark_final_submission_check_failed(project_id, studio_user_id, str(exc))
+        _clear_final_submission_reserved_upload(project_id, studio_user_id)
+        _set_final_submission_stage(
+            project_id,
+            studio_user_id,
+            'failed',
+            current_payload.get('percent', 100),
+            current_payload.get('message') or 'Final submission failed.',
+            success=False,
+            export_id=current_payload.get('export_id'),
+            converted_format_id=current_payload.get('converted_format_id'),
+            uploaded_filename=current_payload.get('uploaded_filename'),
+            progress_current=current_payload.get('progress_current'),
+            progress_total=current_payload.get('progress_total'),
+            lunor_submission_id=current_payload.get('lunor_submission_id'),
+            error=str(exc),
+        )
+
+
 class LunorSubmissionAssetsUploadAPI(APIView):
-    """
-    Server-side version of the "Final Submit" flow:
-    - Verify final submission exists for (project, user, challenge_id, round)
-    - Export CSV of annotations completed by that user for that project
-    - Request an upload URL via GraphQL, PUT the CSV, then call a GraphQL mutation with:
-      lunor_submission_id, studio_project_id, studio_user_id, assets_list_check (asset keys list)
-    """
+    """Queue the final submission flow and report cache-backed status."""
 
     permission_classes = [AllowAny]
+
+    def get(self, request):
+        serializer = LunorSubmissionAssetsUploadStatusSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        payload = _get_final_submission_upload_status(data['studio_project_id'], data['studio_user_id'])
+        return Response(payload, status=status.HTTP_200_OK)
 
     def post(self, request):
         serializer = LunorSubmissionAssetsUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        project_id = data["studio_project_id"]
-        studio_user_id = data["studio_user_id"]
-        lunor_user_id = data.get("lunor_userId")
-        lunor_submission_id = data.get("lunor_submission_id")
+        project_id = data['studio_project_id']
+        studio_user_id = data['studio_user_id']
+        lunor_user_id = data.get('lunor_userId')
+        lunor_submission_id = data.get('lunor_submission_id')
+        assets_list_check = data.get('assets_list_check', True)
 
         project = generics.get_object_or_404(Project, pk=project_id)
-        # GraphQL userId always comes from lunor_userId (studio_user_id is only for Label Studio DB/export)
-        graphql_user_id = str(lunor_user_id).strip()
+        generics.get_object_or_404(User, pk=studio_user_id)
+        challenge_id = _normalize_submission_scope_value(project.challenge_id)
+        round_value = _normalize_submission_scope_value(project.round)
 
-        user = generics.get_object_or_404(User, pk=studio_user_id)
-
-        # Enforce final submission existence check (note: this is the "one change" vs UI gating).
-        challenge_id = project.challenge_id if project.challenge_id not in ["", None] else None
-        round_value = project.round if project.round not in ["", None] else None
-        record = FinalSubmission.objects.filter(
-            project=project, user=user, challenge_id=challenge_id, round=round_value
-        ).first()
-        if not record:
+        if not challenge_id:
             return Response(
-                {"detail": "Final submission does not exist for this user/project/round."},
+                {'detail': 'Project has no challenge_id; cannot request upload URL.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        eligibility_error = _verify_final_submission_eligibility(project, studio_user_id, lunor_user_id)
+        if eligibility_error:
+            return Response({'detail': eligibility_error}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        existing_record = _get_existing_final_submission(project_id, studio_user_id, challenge_id, round_value)
+        if existing_record:
+            return Response(
+                {
+                    'detail': 'Final submission already exists for this user/project/round.',
+                    'final_submission_id': existing_record['id'],
+                },
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # Export CSV for this specific user's annotations
-        export_type = "CSV"
-        tasks_qs = Task.objects.filter(project=project).filter(annotations__completed_by=studio_user_id).distinct()
-        tasks = ExportDataSerializer(
-            tasks_qs.select_related("project").prefetch_related("annotations", "annotations__completed_by", "predictions"),
-            many=True,
-            expand=["drafts"],
-            context={"interpolate_key_frames": False},
-        ).data
+        cached_status = _get_final_submission_upload_status(project_id, studio_user_id)
+        if cached_status.get('status') in FINAL_SUBMISSION_UPLOAD_BLOCKING_STATUSES:
+            response_status = (
+                status.HTTP_200_OK if cached_status.get('status') == 'completed' else status.HTTP_202_ACCEPTED
+            )
+            return Response(cached_status, status=response_status)
 
-        # Filter annotation payload down to that user only
-        for task in tasks:
-            anns = task.get("annotations") or []
-            task["annotations"] = [a for a in anns if a.get("completed_by") == studio_user_id]
+        if not redis_connected():
+            return Response(
+                {'detail': 'Redis worker is required for final submission uploads.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
-        from data_export.models import DataExport  # local import to avoid heavy import at module load
-
-        export_file, _content_type, filename = DataExport.generate_export_file(
-            project,
-            tasks,
-            export_type,
-            False,  # download_resources
-            {},  # get_args
-            hostname=request.build_absolute_uri("/"),
-        )
+        filename = _build_final_submission_filename(project_id, studio_user_id)
         try:
-            export_file.seek(0)
-        except Exception:
-            pass
-        csv_bytes = export_file.read()
-
-        # GraphQL endpoint
-        runtime_graphql = getattr(settings, "GRAPHQL_ENDPOINT", None)
-        graphql_endpoint = (
-            runtime_graphql
-            or os.environ.get("GRAPHQL_ENDPOINT")
-            or "https://prod.100protocol.com/"
-        )
-
-        # 1) Get signed upload URL
-        gql_query = (
-            "query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {"
-            "  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {"
-            "    submissionId"
-            "    urlArr { url key }"
-            "  }"
-            "}"
-        )
-        if not challenge_id:
-            return Response(
-                {"detail": "Project has no challenge_id; cannot request upload URL."},
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            upload_info, upload_url, url_arr = _request_final_submission_upload_url(
+                _get_final_submission_graphql_endpoint(),
+                challenge_id,
+                str(lunor_user_id).strip(),
+                round_value,
+                filename,
             )
-        gql_resp = requests.post(
-            graphql_endpoint,
-            json={
-                "query": gql_query,
-                "variables": {
-                    "challengeId": int(challenge_id),
-                    "userId": graphql_user_id,
-                    "round": int(round_value or 1),
-                    "filename": filename,
-                },
-            },
-            timeout=60,
-        )
-        if gql_resp.status_code >= 400:
-            return Response(
-                {"detail": f"GraphQL getAnnotationUploadUrl failed: {gql_resp.status_code}", "body": gql_resp.text},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        gql_json = gql_resp.json()
-        upload_info = (gql_json.get("data") or {}).get("getAnnotationUploadUrl") or {}
-        url_arr = upload_info.get("urlArr") or []
-        upload_url = (url_arr[0] or {}).get("url") if isinstance(url_arr, list) and url_arr else None
-        if not upload_url:
-            return Response(
-                {"detail": "No upload URL returned from GraphQL.", "graphql": gql_json},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        # 2) Upload CSV
-        put_resp = requests.put(
+        lunor_submission_id_from_quest = upload_info.get('submissionId')
+        _set_final_submission_reserved_upload(
+            project_id,
+            studio_user_id,
+            upload_info,
             upload_url,
-            data=csv_bytes,
-            headers={"Content-Type": "text/csv"},
-            timeout=120,
+            url_arr,
+            filename,
         )
-        if put_resp.status_code >= 400:
-            return Response(
-                {"detail": f"Upload failed: {put_resp.status_code}", "body": put_resp.text},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
 
-        # 3) Update asset list in GraphQL using the requested argument names
-        asset_keys = [item.get("key") for item in url_arr if isinstance(item, dict) and item.get("key")]
-        if not asset_keys:
-            return Response(
-                {"detail": "No asset keys returned from GraphQL urlArr."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
+        accepted_payload = _set_final_submission_stage(
+            project_id,
+            studio_user_id,
+            'accepted',
+            10,
+            'Final submission accepted. Export and upload continue in the background.',
+            success=True,
+            lunor_submission_id=lunor_submission_id_from_quest,
+            submission_id=lunor_submission_id_from_quest,
+            submission_filename=filename,
+            requested_by_id=getattr(request.user, 'id', None),
+        )
+        _mark_final_submission_check_accepted(project_id, studio_user_id, lunor_submission_id_from_quest)
 
-        # Match frontend mutation signature/variables exactly.
-        update_mutation = (
-            "mutation UpdateSubmissionAssetList($submissionId: Int, $challengeId: Int, $round: Int, $userId: String!, $asset_list: [String!]!) {"
-            "  updateSubmissionAssetList("
-            "    submissionId: $submissionId"
-            "    challengeId: $challengeId"
-            "    round: $round"
-            "    userId: $userId"
-            "    asset_list: $asset_list"
-            "  )"
-            "}"
+        start_job_async_or_sync(
+            _run_lunor_submission_assets_upload,
+            project_id,
+            studio_user_id,
+            lunor_user_id,
+            lunor_submission_id=lunor_submission_id_from_quest,
+            assets_list_check=assets_list_check,
+            hostname=request.build_absolute_uri('/'),
+            queue_name='critical',
+            job_timeout=60 * 60 * 6,
         )
-        upd_resp = requests.post(
-            graphql_endpoint,
-            json={
-                "query": update_mutation,
-                "variables": {
-                    "submissionId": upload_info.get("submissionId"),
-                    "challengeId": int(challenge_id),
-                    "round": int(round_value or 1),
-                    # GraphQL expects Quest platform user id here
-                    "userId": graphql_user_id,
-                    "asset_list": asset_keys,
-                },
-            },
-            timeout=60,
-        )
-        if upd_resp.status_code >= 400:
-            return Response(
-                {"detail": f"GraphQL updateSubmissionAssetList failed: {upd_resp.status_code}", "body": upd_resp.text},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        return Response(
-            {
-                "success": True,
-                "project_id": project_id,
-                "studio_user_id": studio_user_id,
-                "lunor_userId": lunor_user_id,
-                "graphql_userId": graphql_user_id,
-                "final_submission_id": record.id,
-                "lunor_submission_id": lunor_submission_id,
-                "assets_list_check": data.get("assets_list_check", True),
-                "uploaded_filename": filename,
-                "asset_keys": asset_keys,
-                "graphql_update_response": upd_resp.json() if upd_resp.headers.get("content-type", "").startswith("application/json") else upd_resp.text,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response(accepted_payload, status=status.HTTP_202_ACCEPTED)
 
 # @method_decorator(
 #     name='get',
