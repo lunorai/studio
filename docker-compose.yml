@@ -28,6 +28,7 @@
 #       - "8000"
 #     depends_on:
 #       - db
+#       - redis
 #     environment:
 #       DJANGO_DB: ${DJANGO_DB}
 #       POSTGRE_NAME: postgres
@@ -40,9 +41,51 @@
 #       # JSON_LOG: 1
 #       GRAPHQL_ENDPOINT: ${GRAPHQL_ENDPOINT}
 #       LUNOR_QUEST_URL: ${LUNOR_QUEST_URL}
+#       REDIS_LOCATION: ${REDIS_LOCATION}
 #     volumes:
 #       - ./mydata:/label-studio/data:rw
+#     extra_hosts:
+#       - "host.docker.internal:host-gateway"
 #     command: label-studio-uwsgi
+
+#   redis:
+#     image: redis:7-alpine
+#     container_name: studio_redis_dev
+#     restart: unless-stopped
+#     expose:
+#       - "6379"
+
+#   rqworker:
+#     build: .
+#     container_name: studio_rqworker_dev
+#     restart: unless-stopped
+#     depends_on:
+#       - db
+#       - redis
+#     environment:
+#       DJANGO_DB: ${DJANGO_DB}
+#       POSTGRE_NAME: postgres
+#       POSTGRE_USER: postgres
+#       POSTGRE_PASSWORD: ${POSTGRE_PASSWORD}
+#       POSTGRE_PORT: ${POSTGRE_PORT}
+#       POSTGRE_HOST: ${POSTGRE_HOST}
+#       LABEL_STUDIO_HOST: ${LABEL_STUDIO_HOST}
+#       LUNOR_JWT_SECRET: ${LUNOR_JWT_SECRET}
+#       GRAPHQL_ENDPOINT: ${GRAPHQL_ENDPOINT}
+#       LUNOR_QUEST_URL: ${LUNOR_QUEST_URL}
+#       REDIS_LOCATION: ${REDIS_LOCATION}
+#     volumes:
+#       - ./mydata:/label-studio/data:rw
+#     extra_hosts:
+#       - "host.docker.internal:host-gateway"
+#     command:
+#       - python3
+#       - /label-studio/label_studio/manage.py
+#       - rqworker
+#       - critical
+#       - default
+#       - high
+#       - low
 
 #   db:
 #     image: pgautoupgrade/pgautoupgrade:13-alpine
@@ -110,6 +153,8 @@ services:
       JSON_LOG: 1
       GRAPHQL_ENDPOINT: ${DEV_GRAPHQL_ENDPOINT}
       LUNOR_QUEST_URL: ${DEV_LUNOR_QUEST_URL}
+      MAX_TASK_BATCH_SIZE: 5000
+      FINAL_SUBMISSION_EXPORT_BATCH_SIZE: 5000
     volumes:
       - ./mydata/dev:/label-studio/data:rw
     command: label-studio-uwsgi
@@ -140,9 +185,57 @@ services:
       JSON_LOG: 1
       GRAPHQL_ENDPOINT: ${PROD_GRAPHQL_ENDPOINT}
       LUNOR_QUEST_URL: ${PROD_LUNOR_QUEST_URL}
+      REDIS_LOCATION: ${REDIS_LOCATION}
+      MAX_TASK_BATCH_SIZE: 5000
+      FINAL_SUBMISSION_EXPORT_BATCH_SIZE: 5000
     volumes:
       - ./mydata/prod:/label-studio/data:rw
     command: label-studio-uwsgi
+    networks:
+      - studio-ipv6
+
+  redis:
+    image: redis:7-alpine
+    container_name: studio_redis_prod
+    restart: unless-stopped
+    expose:
+      - "6379"
+    networks:
+      - studio-ipv6
+
+  rqworker_prod:
+    build: .
+    image: ghcr.io/lunorai/studio:main
+    container_name: studio_rqworker_prod
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    environment:
+      DJANGO_DB: ${DJANGO_DB}
+      POSTGRE_NAME: postgres
+      POSTGRE_USER: postgres
+      POSTGRE_PASSWORD: ${PROD_POSTGRE_PASSWORD}
+      POSTGRE_PORT: ${PROD_POSTGRE_PORT}
+      POSTGRE_HOST: ${PROD_POSTGRE_HOST}
+      LABEL_STUDIO_HOST: ${PROD_LABEL_STUDIO_HOST}
+      LUNOR_JWT_SECRET: ${PROD_LUNOR_JWT_SECRET}
+      JSON_LOG: 1
+      GRAPHQL_ENDPOINT: ${PROD_GRAPHQL_ENDPOINT}
+      LUNOR_QUEST_URL: ${PROD_LUNOR_QUEST_URL}
+      REDIS_LOCATION: ${REDIS_LOCATION}
+      MAX_TASK_BATCH_SIZE: 5000
+      FINAL_SUBMISSION_EXPORT_BATCH_SIZE: 5000
+    volumes:
+      - ./mydata/prod:/label-studio/data:rw
+    command:
+      - python3
+      - /label-studio/label_studio/manage.py
+      - rqworker
+      - critical
+      - default
+      - high
+      - low
     networks:
       - studio-ipv6
 

@@ -162,6 +162,12 @@ export const instruments = {
         const [downloadFilename, setDownloadFilename] = useState("");
         const [submissionErrorMessage, setSubmissionErrorMessage] =
           useState("");
+        const [submissionStatusText, setSubmissionStatusText] = useState("");
+        const [submissionProgressPercent, setSubmissionProgressPercent] =
+          useState(0);
+        const [submissionProgressDetail, setSubmissionProgressDetail] =
+          useState("");
+        const [lunorSubmissionId, setLunorSubmissionId] = useState(null);
         const currentUser = window.APP_SETTINGS?.user;
         const isOwner =
           Boolean(currentUser?.isOwner) ||
@@ -169,14 +175,6 @@ export const instruments = {
             currentUser?.email === currentUser?.activeOrganizationMeta?.email);
 
         if (isOwner) return null;
-
-        const getGraphQLErrorMessage = (payload, fallbackMessage) => {
-          const firstError = Array.isArray(payload?.errors)
-            ? payload.errors[0]
-            : null;
-
-          return firstError?.message || fallbackMessage;
-        };
 
         const downloadExportedCsv = () => {
           if (!downloadUrl) return;
@@ -191,10 +189,13 @@ export const instruments = {
         };
 
         const resetSubmissionModal = () => {
-          if (downloadUrl) URL.revokeObjectURL(downloadUrl);
           setDownloadUrl("");
           setDownloadFilename("");
           setSubmissionErrorMessage("");
+          setSubmissionStatusText("");
+          setSubmissionProgressPercent(0);
+          setSubmissionProgressDetail("");
+          setLunorSubmissionId(null);
           setSubmissionStage("idle");
         };
 
@@ -210,15 +211,14 @@ export const instruments = {
                 ? resp.json()
                 : Promise.reject(new Error(String(resp.status))),
             )
-            .then((json) => setFinalDisabled(Boolean(json?.exists)))
+            .then((json) => {
+              setFinalDisabled(Boolean(json?.exists));
+              if (json?.lunor_submission_id) {
+                setLunorSubmissionId(json.lunor_submission_id);
+              }
+            })
             .catch(() => {});
         }, [projectId]);
-
-        useEffect(() => {
-          return () => {
-            if (downloadUrl) URL.revokeObjectURL(downloadUrl);
-          };
-        }, [downloadUrl]);
 
         useEffect(() => {
           if (submissionStage !== "loading") return;
@@ -230,8 +230,9 @@ export const instruments = {
           const app = window.APP_SETTINGS ?? {};
           const projectIdNum = Number(projectId ?? null);
           const djangoUserId = app?.user?.id ?? null;
+          const lunorUserId = app?.user?.lunor_userId ?? "";
 
-          if (!projectIdNum || !djangoUserId) {
+          if (!projectIdNum || !djangoUserId || !lunorUserId) {
             store?.SDK?.invoke?.("toast", {
               message: "Missing project or user information",
               type: "error",
@@ -244,208 +245,62 @@ export const instruments = {
           try {
             setLoading(true);
             setSubmissionErrorMessage("");
+            setLunorSubmissionId(null);
+            setSubmissionStatusText("Verifying your final submission...");
+            setSubmissionProgressPercent(0);
+            setSubmissionProgressDetail("");
 
-            // 1) Create an async export snapshot containing only current user's annotations
-            const createResp = await fetch(
-              `/api/projects/${projectIdNum}/exports/`,
+            const uploadResp = await fetch(
+              `/api/lunor/submission-assets/upload/`,
               {
                 method: "POST",
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                  title: "Final submission (my annotations)",
-                  task_filter_options: {
-                    annotated: "only",
-                    only_with_annotations: true,
-                    completed_by: djangoUserId,
-                  },
-                  annotation_filter_options: {
-                    usual: true,
-                    completed_by: djangoUserId,
-                  },
-                  serialization_options: {
-                    include_annotation_history: false,
-                    interpolate_key_frames: false,
-                  },
+                  studio_project_id: projectIdNum,
+                  studio_user_id: djangoUserId,
+                  lunor_userId: lunorUserId,
                 }),
               },
             );
 
-            if (!createResp.ok)
-              throw new Error(`Export create ${createResp.status}`);
+            const uploadJson = await uploadResp.json().catch(() => ({}));
 
-            const createJson = await createResp.json();
-            const exportId = createJson?.id;
-
-            if (!exportId) throw new Error("No export id returned");
-
-            // 2) Poll export snapshot status until completed
-            const delay = (ms) =>
-              new Promise((resolve) => setTimeout(resolve, ms));
-            const maxAttempts = 60;
-
-            for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-              const statusResp = await fetch(
-                `/api/projects/${projectIdNum}/exports/${exportId}`,
-                {
-                  credentials: "include",
-                },
-              );
-
-              if (!statusResp.ok)
-                throw new Error(`Export status ${statusResp.status}`);
-
-              const statusJson = await statusResp.json();
-              const status = statusJson?.status;
-
-              if (status === "completed") break;
-              if (status === "failed") throw new Error("Export failed");
-
-              await delay(3000);
-
-              if (attempt === maxAttempts - 1) {
-                throw new Error("Export timed out");
-              }
-            }
-
-            // 3) Download CSV for completed export snapshot
-            const params = new URLSearchParams({ exportType: "CSV" });
-            const downloadResp = await fetch(
-              `/api/projects/${projectIdNum}/exports/${exportId}/download?${params.toString()}`,
-              {
-                credentials: "include",
-              },
-            );
-
-            if (!downloadResp.ok)
-              throw new Error(`Export download ${downloadResp.status}`);
-
-            const blob = await downloadResp.blob();
-
-            // Prepare upload params
-            const fallback = `annotations-${app?.user?.id || "me"}.csv`;
-            const filenameHeader = downloadResp.headers.get("filename");
-            const filename = (filenameHeader || fallback).replace(
-              /\.json$/i,
-              ".csv",
-            );
-            const nextDownloadUrl = URL.createObjectURL(blob);
-            if (downloadUrl) URL.revokeObjectURL(downloadUrl);
-            setDownloadUrl(nextDownloadUrl);
-            setDownloadFilename(filename);
-            const challengeId = Number(store?.project?.challenge_id ?? null);
-            const round = store?.project?.round ?? 1;
-            const userId = app?.user?.lunor_userId ?? "";
-
-            const runtimeGraphql =
-              window.APP_SETTINGS?.graphql_endpoint &&
-              String(window.APP_SETTINGS.graphql_endpoint);
-            const graphqlEndpoint =
-              runtimeGraphql ||
-              process.env.GRAPHQL_ENDPOINT ||
-              "https://prod.100protocol.com/";
-            // GraphQL query to request an upload URL to R2
-            const gqlQuery = `query($challengeId: Int!, $userId: String!, $round: Int!, $filename: String!) {\n  getAnnotationUploadUrl(challengeId: $challengeId, userId: $userId, round: $round, filename: $filename) {\n    challengeId\n    round\n    submissionId\n    maxConcurrentUploadLimit\n    urlArr { url key }\n  }\n}`;
-
-            const gqlResp = await fetch(graphqlEndpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                query: gqlQuery,
-                variables: { challengeId, userId, round, filename },
-              }),
-              // credentials: "include",
-            });
-            if (!gqlResp.ok) throw new Error(`GraphQL ${gqlResp.status}`);
-            const gqlJson = await gqlResp.json();
-            if (Array.isArray(gqlJson?.errors) && gqlJson.errors.length > 0) {
+            if (uploadResp.status === 409) {
+              setFinalDisabled(true);
               throw new Error(
-                getGraphQLErrorMessage(gqlJson, "Failed to get upload URL"),
-              );
-            }
-            const uploadInfo = gqlJson?.data?.getAnnotationUploadUrl;
-            const uploadUrl = uploadInfo?.urlArr?.[0]?.url;
-            if (!uploadUrl) throw new Error("No upload URL returned");
-
-            // Upload CSV blob to R2 using the signed URL
-            const putResp = await fetch(uploadUrl, {
-              method: "PUT",
-              body: blob,
-              headers: {
-                "Content-Type": "text/csv",
-              },
-            });
-            if (!putResp.ok) throw new Error(`Upload ${putResp.status}`);
-
-            // After successful upload, notify backend with UpdateSubmissionAssetList
-            // Use the key(s) returned by getAnnotationUploadUrl, do not use filename
-            const assetKeys = Array.isArray(uploadInfo?.urlArr)
-              ? uploadInfo.urlArr.map((item) => item?.key).filter(Boolean)
-              : [];
-            if (assetKeys.length === 0)
-              throw new Error(
-                "No asset keys returned from getAnnotationUploadUrl",
-              );
-            const updateMutation = `mutation UpdateSubmissionAssetList($submissionId: Int, $challengeId: Int, $round: Int, $userId: String!, $asset_list: [String!]!) {\n  updateSubmissionAssetList(\n    submissionId: $submissionId\n    challengeId: $challengeId\n    round: $round\n    userId: $userId\n    asset_list: $asset_list\n  )\n}`;
-
-            const updateResp = await fetch(graphqlEndpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              // credentials: "include",
-              body: JSON.stringify({
-                query: updateMutation,
-                variables: {
-                  submissionId: uploadInfo?.submissionId ?? null,
-                  challengeId,
-                  round,
-                  userId,
-                  asset_list: assetKeys,
-                },
-              }),
-            });
-            if (!updateResp.ok)
-              throw new Error(`UpdateSubmissionAssetList ${updateResp.status}`);
-            const updateJson = await updateResp.json();
-            if (
-              Array.isArray(updateJson?.errors) &&
-              updateJson.errors.length > 0
-            ) {
-              throw new Error(
-                getGraphQLErrorMessage(
-                  updateJson,
-                  "Failed to update submission asset list",
-                ),
+                uploadJson?.detail || "Final submission already exists.",
               );
             }
 
-            // Notify success
+            if (!uploadResp.ok) {
+              throw new Error(
+                uploadJson?.detail ||
+                  `Final submission request ${uploadResp.status}`,
+              );
+            }
+
+            const submissionId =
+              uploadJson?.lunor_submission_id ??
+              uploadJson?.submission_id ??
+              null;
+
+            if (!submissionId) {
+              throw new Error(
+                "Final submission was accepted but no Lunor submission id was returned.",
+              );
+            }
+
+            setLunorSubmissionId(submissionId);
+            setFinalDisabled(true);
+            setSubmissionStage("success");
             store?.SDK?.invoke?.("toast", {
-              message: "Submission uploaded successfully",
+              message: "Final submission accepted. Processing continues in the background.",
               type: "success",
             });
-
-            // Record final submission in backend and disable button
-            if (projectIdNum) {
-              const recResp = await fetch(
-                `/api/projects/${projectIdNum}/final-submission/`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "include",
-                  body: JSON.stringify({}),
-                },
-              );
-
-              if (!recResp.ok)
-                throw new Error(`Final submission record ${recResp.status}`);
-              setFinalDisabled(true);
-            }
-            setSubmissionStage("success");
           } catch (err) {
             // eslint-disable-next-line no-console
-            console.error("Failed to export annotations by me:", err);
+            console.error("Failed to submit final annotations:", err);
             store?.SDK?.invoke?.("toast", {
               message: `Something went wrong. Please try again.`,
               type: "error",
@@ -463,9 +318,9 @@ export const instruments = {
 
         const modalTitle =
           submissionStage === "loading"
-            ? "Submitting Final Annotations"
+            ? "Verifying Final Submission"
             : submissionStage === "success"
-              ? "Final Submission Complete"
+              ? "Final Submission Accepted"
               : submissionStage === "error"
                 ? "Final Submission Failed"
                 : "Confirm Final Submission";
@@ -476,18 +331,27 @@ export const instruments = {
               <div style={{ display: "flex", justifyContent: "center" }}>
                 <Spinner />
               </div>
-              <div>Preparing and uploading your final submission.</div>
               <div>
-                This can take some time. Please keep this tab open until the
-                process finishes.
+                {submissionStatusText ||
+                  "Verifying your project, annotations, and Quest submission details."}
               </div>
             </div>
           ) : submissionStage === "success" ? (
             <div style={{ display: "grid", gap: 8 }}>
-              <div>Your final submission has been uploaded successfully.</div>
               <div>
-                You can download the exported CSV from here if you need a local
-                copy.
+                Your final submission has been accepted. Export and upload will
+                continue in the background.
+              </div>
+              {lunorSubmissionId ? (
+                <div>
+                  Lunor submission ID:{" "}
+                  <strong>{String(lunorSubmissionId)}</strong>
+                </div>
+              ) : null}
+              <div>
+                You can close this dialog and continue working. If background
+                processing fails, the Final Submit button will become available
+                again so you can retry.
               </div>
             </div>
           ) : submissionStage === "error" ? (
@@ -509,12 +373,12 @@ export const instruments = {
           ) : (
             <div style={{ display: "grid", gap: 8 }}>
               <div>
-                This will export your submitted annotations and upload the final
-                submission for evaluation.
+                This will verify your annotations and register your final
+                submission with Quest.
               </div>
               <div>
-                After confirming, the process will continue in this modal until
-                it finishes.
+                After confirming, you will receive your Lunor submission ID
+                immediately. Export and upload will continue in the background.
               </div>
             </div>
           );
@@ -525,15 +389,8 @@ export const instruments = {
             <div
               style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
             >
-              <Button look="outlined" onClick={resetSubmissionModal}>
+              <Button variant="primary" onClick={resetSubmissionModal}>
                 Close
-              </Button>
-              <Button
-                variant="primary"
-                disabled={!downloadUrl}
-                onClick={downloadExportedCsv}
-              >
-                Download CSV
               </Button>
             </div>
           ) : submissionStage === "error" ? (
@@ -586,9 +443,9 @@ export const instruments = {
 
         const isDisabled = loading || finalDisabled;
         const tooltipTitle = loading
-          ? "Uploading your submission..."
+          ? "Verifying your submission..."
           : finalDisabled
-            ? "Final submission already exists"
+            ? "Final submission already submitted"
             : "Submit your annotations for evaluation";
 
         return (

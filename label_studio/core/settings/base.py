@@ -16,6 +16,7 @@ import re
 from datetime import timedelta
 
 from django.core.exceptions import ImproperlyConfigured
+from urllib3.util.url import parse_url
 
 from label_studio.core.utils.params import get_bool_env, get_env_list
 
@@ -349,31 +350,31 @@ TEMPLATES = [
 ]
 
 # RQ
+REDIS_LOCATION = get_env('REDIS_LOCATION', 'redis://localhost:6379/0')
+_redis_url = parse_url(REDIS_LOCATION)
+_redis_db = 0
+if _redis_url.path:
+    try:
+        _redis_db = int(str(_redis_url.path).lstrip('/'))
+    except (TypeError, ValueError):
+        _redis_db = 0
+
+_rq_queue_base = {
+    'HOST': _redis_url.host or 'localhost',
+    'PORT': _redis_url.port or 6379,
+    'DB': _redis_db,
+    'DEFAULT_TIMEOUT': 180,
+}
+if _redis_url.auth:
+    _rq_queue_base['PASSWORD'] = _redis_url.auth
+if _redis_url.scheme == 'rediss':
+    _rq_queue_base['SSL'] = True
+
 RQ_QUEUES = {
-    'critical': {
-        'HOST': 'localhost',
-        'PORT': 6379,
-        'DB': 0,
-        'DEFAULT_TIMEOUT': 180,
-    },
-    'high': {
-        'HOST': 'localhost',
-        'PORT': 6379,
-        'DB': 0,
-        'DEFAULT_TIMEOUT': 180,
-    },
-    'default': {
-        'HOST': 'localhost',
-        'PORT': 6379,
-        'DB': 0,
-        'DEFAULT_TIMEOUT': 180,
-    },
-    'low': {
-        'HOST': 'localhost',
-        'PORT': 6379,
-        'DB': 0,
-        'DEFAULT_TIMEOUT': 180,
-    },
+    'critical': dict(_rq_queue_base),
+    'high': dict(_rq_queue_base),
+    'default': dict(_rq_queue_base),
+    'low': dict(_rq_queue_base),
 }
 
 # How long to keep failed RQ jobs (in seconds); default is 30 days
@@ -570,7 +571,11 @@ REACT_APP_ROOT = os.path.join(BASE_DIR, '../../web/dist/apps/labelstudio')
 # per project settings
 BATCH_SIZE = 1000
 # Maximum number of tasks to process in a single batch during export operations
-MAX_TASK_BATCH_SIZE = int(get_env('MAX_TASK_BATCH_SIZE', 1000))
+MAX_TASK_BATCH_SIZE = int(get_env('MAX_TASK_BATCH_SIZE', 5000))
+# Final submission export tuning for large projects (e.g. 100k+ tasks)
+FINAL_SUBMISSION_EXPORT_BATCH_SIZE = int(get_env('FINAL_SUBMISSION_EXPORT_BATCH_SIZE', 5000))
+FINAL_SUBMISSION_UPLOAD_READ_TIMEOUT = int(get_env('FINAL_SUBMISSION_UPLOAD_READ_TIMEOUT', 4 * 60 * 60))
+FINAL_SUBMISSION_FILE_COPY_BUFFER_SIZE = int(get_env('FINAL_SUBMISSION_FILE_COPY_BUFFER_SIZE', 8 * 1024 * 1024))
 # Total size of task data (in bytes) to process per batch - used to calculate dynamic batch sizes
 # For example: if task data is 10MB, batch will be ~5 tasks to stay under 50MB limit
 TASK_DATA_PER_BATCH = int(get_env('TASK_DATA_PER_BATCH', 50 * 1024 * 1024))  # 50 MB in bytes
